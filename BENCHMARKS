@@ -1,0 +1,36 @@
+In order to assess Valkyree's performance I devised a simple benchmark:
+render an 8-second clip of "Chopsticks" in 2-part harmony using an instrument
+based on Valkyree's square-wave generator function with a sampling frequency of
+22050 Hz. The stuff necessary to run the tests is in the test/ directory.
+
+Here are the results:
+
+Test machine: 3.3GHz Intel Pentium 4 Toshiba laptop, 512MB RAM
+
+Gauche 0.8.6
+Method of testing:
+  time gosh gauche-driver.scm
+
+Gambit 4.0b17
+Method of testing:
+  /usr/local/Gambit-C/bin/gsc -dynamic gambit-driver.scm
+  time /usr/local/Gambit-C/bin/gsi gambit-driver.o1
+
+Chicken 2.2
+Method of testing:
+  csc chicken-driver.scm -o chicken-driver
+  time ./chicken-driver
+
+
+         Time to execute   Time relative to
+             (sec.)        sound length
+                           (1.00 = real time)
+
+Gauche       9.804            1.23
+
+Chicken      6.237            0.78
+
+Gambit     129.007           16.13
+
+
+

@@ -1,18 +1,9 @@
-This is Valkyree -- a sound and music generation system for Gambit.
+This is Valkyree -- a sound and music generation system for Gambit, Chicken,
+and Gauche.
 
 Not much here right now, so feel free to hack and send patches.
 
-Note: syntax-case must be enabled. Put (include "~~/syntax-case.scm") in your
-gambcext or gambcini before attempting to use Valkyree.
-
-The order of compilation/evaluation is:
-
-  valk-snd.scm
-  valk-seq.scm
-  valk-file.scm
-  <your application file(s)>
-
-Try the test! (it's in valk-test.scm)
+Please read the file BENCHMARKS for some very rough performance measurements.
 
 --Jeff Read <bitwize@gmail.com>
 
