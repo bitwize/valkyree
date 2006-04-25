@@ -9,11 +9,8 @@
       (cond ((>= c 48) v)
 	    (#t (vector-set! v (+ c 12) (* a (expt *htf* c)))
 		(loop (+ c 1) v)
-		)
-	    )
-      )
-    )
-  )
+		)))))
+
 
 (define (note-length beats bpm)
   (* beats (/ 60.0 bpm)))
@@ -25,9 +22,8 @@
   (let* ((nl
 	  (cond
 	   ((null? specifier) 0.875)
-	   ((eq? specifier 'legato) 1.0)
-	   ((eq? specifier 'staccato) 0.5)
-	   )))
+	   ((eq? (car specifier) 'legato) 1.0)
+	   ((eq? (car specifier) 'staccato) 0.5))))
     (lambda (freq vel len)
       (let* ((f2 (f freq vel)) (len2 (* len nl)))
 	(lambda (i)

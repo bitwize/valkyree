@@ -4,15 +4,15 @@
 
 ; In mono (write-raw) or stereo (st-write-raw).
 
-(define (s16->u8vector-le v)
-  (let* ((l (s16vector-length v))
+(define (u16->u8vector-le v)
+  (let* ((l (u16vector-length v))
 	 (l2 (* l 2))
 	 (nv (make-u8vector l2 0)))
     (let loop ((i 0))
       (cond
        ((>= i l)
 	nv)
-       (else (let* ((s (signed->unsigned16 (s16vector-ref v i)))
+       (else (let* ((s (u16vector-ref v i))
 		    (v1 (remainder s 256))
 		    (v2 (quotient s 256))
 		    (i2 (* i 2)))
@@ -26,8 +26,8 @@
 (define
   (write-raw fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sound-render-s16vector gen t samplerate))
-	 (nv (s16->u8vector-le v))
+	 (v (sound-render-u16vector gen t samplerate))
+	 (nv (u16->u8vector-le v))
 	 
 	 (len (u8vector-length nv)))
     
@@ -37,8 +37,8 @@
 
 (define (st-write-raw fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sound-render-s16vector-st gen t samplerate))
-	 (nv (s16->u8vector-le v))
+	 (v (sound-render-u16vector-st gen t samplerate))
+	 (nv (u16->u8vector-le v))
 	 
 	 (len (u8vector-length nv)))
     

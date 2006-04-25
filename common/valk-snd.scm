@@ -78,29 +78,29 @@
       (+ 65536 n)
       n))
 
-(define (sound-render-s16vector gen t samplerate)
+(define (sound-render-u16vector gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
-	 (v (make-s16vector (* samples))))
+	 (v (make-u16vector (* samples))))
     (let loop ((i 0))
       (cond ((>= i samples)
 	     v)
-	    (else (begin (s16vector-set! v i
-					 (max -32768
-					      (min 32767
-						   (inexact->exact
-						    (floor
-						     (* (gen (/ i samplerate))
-							32768))))))
+	    (else (begin (u16vector-set! v i
+					 (bitwise-and
+					  (inexact->exact
+					   (floor
+					    (* (gen (/ i samplerate))
+					       32768)))
+					  #xffff))
 		       
 		       (loop (+ i 1))))))))
 
-(define (sound-render-s16vector-st gen t samplerate)
+(define (sound-render-u16vector-st gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
 	 (s2 (* samples 2))
 	 
-	 (v (make-s16vector s2)))
+	 (v (make-u16vector s2)))
     (let loop ((i 0))
       (cond ((>= i samples)
 	     v)
@@ -108,16 +108,17 @@
 				    (gen (/ i samplerate)))
 		  
 		    (lambda (a b)
-		      (s16vector-set! v (* i 2)
-				      (max -32768
-					   (min 32767 (inexact->exact
-						       (floor
-							(* a 32768))))))
-		      (s16vector-set! v (+ (* i 2) 1)
-				      (max -32768
-					   (min 32767
-						(inexact->exact
-						 (floor (* b 32768))))))))
+		      (u16vector-set! v (* i 2)
+				      (bitwise-and
+				       (inexact->exact
+					(floor
+					 (* a 32768)))
+				       #xffff))
+		      (u16vector-set! v (+ (* i 2) 1)
+				      (bitwise-and
+				       (inexact->exact
+					(floor (* b 32768)))
+				       #xffff))))
 		  (loop (+ i 1))
 		  )))))
 

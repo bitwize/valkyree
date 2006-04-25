@@ -12,7 +12,9 @@
 
 (define (write-subu8vector v start end port)
   (write-block v port start end))
-
+(define bitwise-and logand)
+(define bitwise-ior logior)
+(define arithmetic-shift ash)
 (load "../common/valk-snd.scm")
 (load "../common/valk-file.scm")
 (load "../common/valk-seq.scm")
