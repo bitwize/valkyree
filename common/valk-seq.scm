@@ -1,9 +1,7 @@
 (define *htf* (expt 2 1/12))
 
 (define *note-table*
-  (let* (
-	 (a 220)
-	 )
+  (let* ((a 220))
     (let loop
 	((c -12) (v (make-vector 60 0.0)))
       (cond ((>= c 48) v)
@@ -29,6 +27,19 @@
 	(lambda (i)
 	  (if (> i len2) 0 (f2 i)))))))
 
+(define (make-adsr-inst f aenv . specifier)
+  (let* ((nl
+	  (cond
+	   ((null? specifier) 0.875)
+	   ((eq? (car specifier) 'legato) 1.0)
+	   ((eq? (car specifier) 'staccato) 0.5))))
+    (lambda (freq vel len)
+      (let* ((f2 (f freq vel)) (len2 (* len nl)))
+	(envelope-ampl
+	 f2
+	 (adsr-envelope-fun aenv len2))))))
+
+
 (define (play-tone1 inst freq vel bstart blen bpm)
   (let* (
 	 (len (note-length blen bpm))
@@ -52,8 +63,9 @@
 	    (v (cadr (car l)))
 	    (d (caddr (car l))))
        (loop (cdr l)  
-	     (mix f (if (zero? n)
-			silence
-			(play-tone inst
-				   n v m d)))
+	     (if (zero? n)
+		 f
+		 (mix f
+		      (play-tone inst
+				 n v m d)))
 	     (+ m d))))))

@@ -53,6 +53,49 @@
 	       1.0
 	       0.0))))))
 
+; ADSR (attack, decay, sustain, release) envelope structure.
+; Useful for making ADSR functions to control the volume output of notes.
+
+(define-record-type <adsr-envelope>
+  (make-adsr-envelope a d s r)
+  adsr-envelope?
+  (a adsr-attack)
+  (d adsr-decay)
+  (s adsr-sustain)
+  (r adsr-release))
+
+(define (ramp start end start-time length t)
+  (if (> t start-time)
+      (if (or (<= length 0)
+	      (>= t (+ start-time length)))
+	  end
+	  (+ start
+	     (*
+	      (/ (- end start)
+		 length)
+	      (- t start-time))))
+      start))
+
+
+(define (adsr-envelope-fun e len)
+  (let ((a (adsr-attack e))
+	(d (adsr-decay e))
+	(s (adsr-sustain e))
+	(r (adsr-release e)))
+    (lambda (t)
+      (cond
+       ((< t 0)
+	0)
+       ((< t a)
+	(ramp 0.0 1.0 0 a t))
+       ((< t (+ a d))
+	(ramp 1.0 s a d t))
+       ((< t len)
+	s)
+       (else
+	(ramp s 0.0 len r t))))))
+
+
 
 (define (envelope-ampl f1 f2)
   (lambda (t)

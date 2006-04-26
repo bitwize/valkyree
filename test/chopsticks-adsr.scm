@@ -15,7 +15,13 @@
 	      '(349 349 349 349 349 349 330 330 330 330 330 330
 		    294 294 294 294 262 294 262 262 262 262))))
 
-(define *inst* (make-simple-inst square-wave))
+(define *inst* (make-adsr-inst (lambda (f v)
+				 (square-wave f v 0.35))
+			       (make-adsr-envelope
+				0.0
+				0.08
+				0.4
+				0.05)))
 
 
 

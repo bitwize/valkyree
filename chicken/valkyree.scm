@@ -1,5 +1,7 @@
 (require-extension lolevel)
 (require-extension srfi-4)
+(require-extension srfi-9)
+
 
 (declare (unit valkyree))
 
