@@ -116,10 +116,22 @@
 	0.0
 	(f (- t offset)))))
 
-(define (signed->unsigned16 n)
-  (if (negative? n)
-      (+ 65536 n)
-      n))
+
+; The u16clamp function takes a signal value and clamps it to the range
+; [1.0,1.0], then returns as a result an unsigned representation of the signed,
+; clamped value scaled to an exact integer between -32768 and 32767.
+; "It's gonna be clamp this, clamp that, bada climp, bada clamp!"
+;                  --Clamps, from Futurama's Robot Mafia
+
+(define (u16clamp x)
+  (bitwise-and
+   (inexact->exact
+    (floor
+     (* (min 1.0
+	     (max -1.0 x))
+	32767)))
+   #xffff))
+
 
 (define (sound-render-u16vector gen t samplerate)
   (let* (
@@ -129,14 +141,10 @@
       (cond ((>= i samples)
 	     v)
 	    (else (begin (u16vector-set! v i
-					 (bitwise-and
-					  (inexact->exact
-					   (floor
-					    (* (gen (/ i samplerate))
-					       32768)))
-					  #xffff))
-		       
+					 (u16clamp
+					  (gen (/ i samplerate))))       
 		       (loop (+ i 1))))))))
+
 
 (define (sound-render-u16vector-st gen t samplerate)
   (let* (
@@ -152,18 +160,11 @@
 		  
 		    (lambda (a b)
 		      (u16vector-set! v (* i 2)
-				      (bitwise-and
-				       (inexact->exact
-					(floor
-					 (* a 32768)))
-				       #xffff))
+				     (u16clamp a))
 		      (u16vector-set! v (+ (* i 2) 1)
-				      (bitwise-and
-				       (inexact->exact
-					(floor (* b 32768)))
-				       #xffff))))
-		  (loop (+ i 1))
-		  )))))
+				       (u16clamp b))))
+		  (loop (+ i 1)))))))
+
 
 ; Mix generator. Mixes the output of two generators together.
 

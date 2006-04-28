@@ -18,10 +18,16 @@
 
 (define (make-simple-inst f . specifier)
   (let* ((nl
-	  (cond
-	   ((null? specifier) 0.875)
-	   ((eq? (car specifier) 'legato) 1.0)
-	   ((eq? (car specifier) 'staccato) 0.5))))
+	  (if 
+	   (null? specifier) 0.875
+	   (case (car specifier)
+	     ((legato)
+	      1.0)
+	     ((staccato)
+	      0.5)
+	     (else 0.875))
+	   
+	   )))
     (lambda (freq vel len)
       (let* ((f2 (f freq vel)) (len2 (* len nl)))
 	(lambda (i)
@@ -29,15 +35,21 @@
 
 (define (make-adsr-inst f aenv . specifier)
   (let* ((nl
-	  (cond
-	   ((null? specifier) 0.875)
-	   ((eq? (car specifier) 'legato) 1.0)
-	   ((eq? (car specifier) 'staccato) 0.5))))
+	  (if
+	   (null? specifier) 0.875
+	   (case (car specifier)
+	     ((legato)
+	      1.0)
+	     ((staccato)
+	      0.5)
+	     (else 0.875)))))
+    
     (lambda (freq vel len)
       (let* ((f2 (f freq vel)) (len2 (* len nl)))
 	(envelope-ampl
 	 f2
 	 (adsr-envelope-fun aenv len2))))))
+
 
 
 (define (play-tone1 inst freq vel bstart blen bpm)
