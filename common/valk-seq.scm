@@ -1,4 +1,4 @@
-(define *htf* (expt 2 1/12))
+(define *htf* (expt 2 (/ 1.0 12.0)))
 
 (define *note-table*
   (let* ((a 220))
@@ -46,7 +46,7 @@
     
     (lambda (freq vel len)
       (let* ((f2 (f freq vel)) (len2 (* len nl)))
-	(envelope-ampl
+	(modulate
 	 f2
 	 (adsr-envelope-fun aenv len2))))))
 

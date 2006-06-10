@@ -1,16 +1,9 @@
-; Some important constants and period/frequency conversions.
-
-
-;(declare (flonum))
-
-;(declare (standard-bindings))
-
-
+; Some important constants and frequency conversions.
 
 (define *pi* (* (atan 1) 4))
 (define *2pi* (* (atan 1) 8))
-(define (freq->period f) (* f *2pi*))
-(define (period->freq f) (/ f *2pi*))
+(define (ang-freq f) (* f *2pi*))
+
 
 (define (constantly x)
   (lambda t
@@ -28,7 +21,7 @@
 		   0
 		   (car phase))))
     (lambda (t)
-      (* ampl (cos (+ phase (freq->period (* freq t))))))))
+      (* ampl (cos (+ phase (ang-freq (* freq t))))))))
 
 
 ; Square wave generator.
@@ -51,7 +44,20 @@
 	(* ampl
 	   (if (< r duty)
 	       1.0
-	       0.0))))))
+	       -1.0))))))
+
+; Sawtooth wave generator.
+; Produces a waveform that looks like this:
+;     /|   /|   /|
+;    / |  / |  / |
+;   /  | /  | /  |
+;  /   |/   |/   |
+
+(define (saw-wave freq vel)
+  (lambda (t)
+    (let* ((t2 (* freq t)))
+      (* 2 vel (- t2
+		  (floor (+ 0.5 t2)))))))
 
 ; ADSR (attack, decay, sustain, release) envelope structure.
 ; Useful for making ADSR functions to control the volume output of notes.
@@ -97,7 +103,7 @@
 
 
 
-(define (envelope-ampl f1 f2)
+(define (modulate f1 f2)
   (lambda (t)
     (* (f1 t)
        (f2 t))))
@@ -105,7 +111,7 @@
 ; Amplitude changer. Multiply amplitude of output of generator func by factor.
 
 (define (change-ampl f factor)
-  (envelope-ampl f (constantly factor)))
+  (modulate f (constantly factor)))
 
 ; Sample offset generator. Shifts the output of func forward in time by t
 ; seconds.
@@ -118,8 +124,8 @@
 
 
 ; The u16clamp function takes a signal value and clamps it to the range
-; [1.0,1.0], then returns as a result an unsigned representation of the signed,
-; clamped value scaled to an exact integer between -32768 and 32767.
+; [-1.0,1.0], then returns as a result an unsigned representation of the
+; signed, clamped value scaled to an exact integer between -32768 and 32767.
 ; "It's gonna be clamp this, clamp that, bada climp, bada clamp!"
 ;                  --Clamps, from Futurama's Robot Mafia
 
@@ -136,6 +142,7 @@
 (define (sound-render-u16vector gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate)) ; thanks to Brad Lucier
 	 (v (make-u16vector (* samples))))
     (let loop ((i 0))
       (cond ((>= i samples)
@@ -145,10 +152,23 @@
 					  (gen (/ i samplerate))))       
 		       (loop (+ i 1))))))))
 
+(define (sound-render-f32vector gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate))
+	 (v (make-f32vector (* samples))))
+    (let loop ((i 0))
+      (cond ((>= i samples)
+	     v)
+	    (else (begin (f32vector-set! v i
+					(gen (/ i samplerate)))
+			 
+		       (loop (+ i 1))))))))
 
 (define (sound-render-u16vector-st gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate))
 	 (s2 (* samples 2))
 	 
 	 (v (make-u16vector s2)))
@@ -163,6 +183,26 @@
 				     (u16clamp a))
 		      (u16vector-set! v (+ (* i 2) 1)
 				       (u16clamp b))))
+		  (loop (+ i 1)))))))
+
+(define (sound-render-f32vector-st gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate)))) 
+	 (samplerate (exact->inexact samplerate))
+	 (s2 (* samples 2))
+	 
+	 (v (make-f32vector s2)))
+    (let loop ((i 0))
+      (cond ((>= i samples)
+	     v)
+	    (else (call-with-values (lambda ()
+				    (gen (/ i samplerate)))
+		  
+		    (lambda (a b)
+		      (f32vector-set! v (* i 2)
+				      a)
+		      (f32vector-set! v (+ (* i 2) 1)
+				      b)))
 		  (loop (+ i 1)))))))
 
 
@@ -227,4 +267,68 @@
      (change-ampl f
 		  (- 0.5 fac2))
      (change-ampl f (+ 0.5 fac2)))))
+
+
+(define (unsigned->signed16 n) (if (> n 32767) (- n 65536) n))
+
+;(define (unsigned->signed16 n)
+;(- n (arithmetic-shift (bitwise-and n 32768)
+;1)))
+
+
+
+(define (sampled-sound-u16 vec rate)
+  (let* ((l (u16vector-length vec)))
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (or
+	     (< c 0)
+	     (>= c l))
+	    0
+	    (/ (unsigned->signed16 (u16vector-ref vec c))
+	       32767.0))))))
+
+
+(define (sampled-sound vec rate)
+  (let* ((l (f32vector-length vec)))
+    
+    
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (or (< c 0)
+		(>= c l))
+	    0
+	    (f32vector-ref vec c))))))
+
+
+(define (sampled-sound-looping vec rate)
+  (let* ((l (f32vector-length vec)))  
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (< c 0)
+	    0
+	    (f32vector-ref vec (modulo c l)))))))
+
+(define (make-wavetable func nsamps)
+  (sound-render-f32vector func 1.0 nsamps))
+
+(define (harmonics . x)
+  (let loop
+      ((i 1.0)
+       (l x)
+       (f silence))
+    
+    (cond
+     ((null? l)
+      f)
+     (else
+      (loop (+ i 1)
+	    (cdr l)
+	    (mix f (sine-wave i (car l))))))))
+
+(define (wavetable-function func nsamps)
+  (let* ((wt (make-wavetable func nsamps)))
+    (lambda (freq vol)
+      (change-ampl (sampled-sound-looping wt (* freq nsamps))
+		   vol))))
 

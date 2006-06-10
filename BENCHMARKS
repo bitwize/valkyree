@@ -18,7 +18,7 @@ Method of testing:
 
 Chicken 2.2
 Method of testing:
-  csc chicken-driver.scm -o chicken-driver
+  csc chicken-driver.scm ../chicken/valkyree.scm -o chicken-driver
   time ./chicken-driver
 
 
@@ -26,11 +26,11 @@ Method of testing:
              (sec.)        sound length
                            (1.00 = real time)
 
-Gauche       9.804            1.23
+Gauche       5.662            0.71
 
-Chicken      6.237            0.78
+Chicken      4.175            0.52
 
-Gambit     129.007           16.13
+Gambit       2.973            0.37
 
 
 

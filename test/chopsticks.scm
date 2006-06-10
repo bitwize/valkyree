@@ -15,12 +15,13 @@
 	      '(349 349 349 349 349 349 330 330 330 330 330 330
 		    294 294 294 294 262 294 262 262 262 262))))
 
-(define *inst* (make-simple-inst square-wave))
+(define *inst* (make-simple-inst
+		 square-wave
+		))
 
-
-
-(write-raw "chopsticks.raw" (mix
-			     (play-roll *inst* *chopsticks-note-table1* 0)
-			     (play-roll *inst* *chopsticks-note-table2* 0))
-	  8.0 22050)
+(write-raw "chopsticks.raw"
+	   (mix
+	    (play-roll *inst* *chopsticks-note-table1* 0)
+	    (play-roll *inst* *chopsticks-note-table2* 0))
+	   8.0 22050)
 
