@@ -3,7 +3,5 @@ and Gauche.
 
 Not much here right now, so feel free to hack and send patches.
 
-Please read the file BENCHMARKS for some very rough performance measurements.
-
 --Jeff Read <bitwize@gmail.com>
 

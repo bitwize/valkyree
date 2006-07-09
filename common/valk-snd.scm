@@ -143,67 +143,77 @@
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
 	 (samplerate (exact->inexact samplerate)) ; thanks to Brad Lucier
+	 (sampleinc (/ 1.0 samplerate)) 
 	 (v (make-u16vector (* samples))))
-    (let loop ((i 0))
+    (let loop ((i 0)
+	       (j 0.0))
       (cond ((>= i samples)
 	     v)
 	    (else (begin (u16vector-set! v i
 					 (u16clamp
-					  (gen (/ i samplerate))))       
-		       (loop (+ i 1))))))))
+					  (gen j)))       
+		       (loop (+ i 1) (+ j sampleinc))))))))
+
 
 (define (sound-render-f32vector gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
 	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
 	 (v (make-f32vector (* samples))))
-    (let loop ((i 0))
+    (let loop ((i 0)
+	       (j 0.0))
       (cond ((>= i samples)
 	     v)
 	    (else (begin (f32vector-set! v i
-					(gen (/ i samplerate)))
+					(gen j))
 			 
-		       (loop (+ i 1))))))))
+		       (loop (+ i 1) (+ j sampleinc))))))))
+
 
 (define (sound-render-u16vector-st gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate))))
 	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
 	 (s2 (* samples 2))
 	 
 	 (v (make-u16vector s2)))
-    (let loop ((i 0))
+    (let loop ((i 0)
+	       (j 0.0))
       (cond ((>= i samples)
 	     v)
 	    (else (call-with-values (lambda ()
-				    (gen (/ i samplerate)))
+				    (gen j))
 		  
 		    (lambda (a b)
 		      (u16vector-set! v (* i 2)
 				     (u16clamp a))
 		      (u16vector-set! v (+ (* i 2) 1)
 				       (u16clamp b))))
-		  (loop (+ i 1)))))))
+		  (loop (+ i 1) (+ j sampleinc)))))))
 
 (define (sound-render-f32vector-st gen t samplerate)
   (let* (
 	 (samples (inexact->exact (floor (* t samplerate)))) 
 	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
+
 	 (s2 (* samples 2))
 	 
 	 (v (make-f32vector s2)))
-    (let loop ((i 0))
+    (let loop ((i 0) (j 0.0))
       (cond ((>= i samples)
 	     v)
 	    (else (call-with-values (lambda ()
-				    (gen (/ i samplerate)))
+				    (gen j))
 		  
 		    (lambda (a b)
 		      (f32vector-set! v (* i 2)
 				      a)
 		      (f32vector-set! v (+ (* i 2) 1)
 				      b)))
-		  (loop (+ i 1)))))))
+		  (loop (+ i 1) (+ j sampleinc)))))))
 
 
 ; Mix generator. Mixes the output of two generators together.
