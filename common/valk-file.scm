@@ -68,6 +68,10 @@
     (write-subu8vector nv 0 len p)
     (close-output-port p)))
 
+(define (write-wav fl gen t samplerate)
+  (values))
+
+
 (define (read-chunk port size)
   (let* ((vec (make-u8vector size))
 	 (r (read-subu8vector vec 0 size port)))
@@ -84,4 +88,3 @@
 	(if (zero? (u8vector-length chunk))
 	    (apply u8vector-append (reverse l))
 	    (loop (cons chunk l)))))))
-
