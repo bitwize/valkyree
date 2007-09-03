@@ -1,164 +1,347 @@
-; Some important constants and period/frequency conversions.
+; Some important constants and frequency conversions.
 
 (define *pi* (* (atan 1) 4))
 (define *2pi* (* (atan 1) 8))
-(define (freq->period f) (* f *2pi*))
-(define (period->freq f) (/ f *2pi*))
-
-; The basic Valkyree generator builder macro. You specify a function to output
-; a waveform given a time parameter, i, and some other parameters; and it
-; defines two functions: your original function and a generator constructor
-; that takes the other parameters and returns a generator that takes only i.
-
-(define-syntax define-valk-gen
-  (syntax-rules ()
-    ((_ name2 (name i p1 ...) body)
-     (begin (define (name i p1 ...)
-	      body)
-	    (define (name2 p1 ...)
-	      (lambda (i)
-		(name i p1 ...)))))))
-
-; Create a sine wave lookup table with samps samples
-
-(define (make-sine-table samps)
-  (let* ((subdiv (/ *2pi* samps))
-	 (v (make-vector samps 0)))
-    
-    (let loop ((i 0)) (if (>= i samps) v
-			  (begin
-			    (vector-set! v i
-					 (inexact->exact
-					  (floor
-					   (* 
-					    (sin (* i subdiv))
-					    32767))))
-			    (loop (+ i 1)))))))
+(define (ang-freq f) (* f *2pi*))
 
 
-; Important frequencies in Valkyree: the resolution of the table, the sampling
-; frequency, and the ratio between the two.
+(define (constantly x)
+  (lambda t
+    x))
 
-(define valkyree-freq
-  (let* ((t 11025)
-	 (s 44100))
-    
-    (lambda (sel)
-      (cond
-       ((eq? sel 'table) t)
-       ((eq? sel 'samples) s)
-       ((eq? sel 'ratio) (/ t s))
-       (#t #f)))))
-
-; A default sine wave table.
-
-(define *sine-table*
-  (make-sine-table (valkyree-freq 'table)))
-
-
-(define (lookup-sin i)
-  (vector-ref *sine-table* (remainder i (valkyree-freq 'table))))
+(define silence (constantly 0))
 
 
 ; Sine wave generator.
+; Produces a waveform according to the following function:
+; s(t) = A cos ωt + p where ω = 2πf
 
-(define-valk-gen sine-gen (sine-wave i freq)
-  (lookup-sin (inexact->exact
-	       (floor (* i freq (valkyree-freq 'ratio))))))
+(define (sine-wave freq ampl . phase)
+  (let ((phase (if (null? phase)
+		   0
+		   (car phase))))
+    (lambda (t)
+      (* ampl (cos (+ phase (ang-freq (* freq t))))))))
+
 
 ; Square wave generator.
+;
+; Produces a waveform according to the function:
+;        | 1 if r is less than d
+; s(t) = |
+;        | 0 otherwise
+;
+; where r is where t is in the current period
+;       d is the duty cycle
+;
+(define (square-wave freq ampl . duty)
+  (let ((duty (if (null? duty)
+		   0.5
+		   (car duty))))
+    (lambda (t)
+      (let* ((t2 (* t freq))
+	     (r (- t2 (floor t2))))
+	(* ampl
+	   (if (< r duty)
+	       1.0
+	       -1.0))))))
 
-(define-valk-gen square-gen (square-wave i freq)
-  (let*  ((s (inexact->exact (round (/ (valkyree-freq 'samples) freq))))
-	 (hs (/ s 2)))
+; Sawtooth wave generator.
+; Produces a waveform that looks like this:
+;     /|   /|   /|
+;    / |  / |  / |
+;   /  | /  | /  |
+;  /   |/   |/   |
+
+(define (saw-wave freq vel)
+  (lambda (t)
+    (let* ((t2 (* freq t)))
+      (* 2 vel (- t2
+		  (floor (+ 0.5 t2)))))))
+
+; ADSR (attack, decay, sustain, release) envelope structure.
+; Useful for making ADSR functions to control the volume output of notes.
+
+(define-record-type :adsr-envelope
+  (make-adsr-envelope a d s r)
+  adsr-envelope?
+  (a adsr-attack)
+  (d adsr-decay)
+  (s adsr-sustain)
+  (r adsr-release))
+
+(define (ramp start end start-time length)
+  (let* ((fac (/ (- end start) length))
+	 (end-time (+ start-time length)))
+    (lambda (t)
+      (if (> t start-time)
+	  (if (or (<= length 0)
+		  (>= t end-time))
+	      end
+	      (+ start
+		 (*
+		  fac
+		  (- t start-time))))
+	  start))))
+
+
+(define (adsr-envelope-gen e len)
+  (let* ((a (adsr-attack e))
+	 (d (adsr-decay e))
+	 (s (adsr-sustain e))
+	 (r (adsr-release e))
+	 (ramp-a (ramp 0.0 1.0 0.0 a))
+	 (ramp-d (ramp 1.0 s a d))
+	 (ramp-r (ramp s 0.0 len r)))
     
-    (if (< (remainder i s) hs) -32767 32767)))
-
-; Amplitude changer. Multiply amplitude of output of generator func by factor.
-
-(define-valk-gen change-ampl-gen (change-ampl i func factor)
-  (let* ((r (inexact->exact (floor (* (func i) factor)))))
-    (if (> (abs r) 32767) (* 32767 (if (< r 0) -1 1))
-	r)))
-
-; Sample offset generator. Shifts the output of func forward in time by samps
-; samples.
-
-(define-valk-gen sample-offset-gen (sample-offset i func samps)
-  (let* ((i2 (- i samps)))
-    (if (< i2 0)
-	0
-	(func i2))))
-
-
-(define (signed->unsigned16 n)
-  (if (negative? n)
-      (+ 65536 n)
-      n))
-
-(define (sound-render-s16vector gen samples)
-  (let* ((v (make-s16vector samples)))
-    (let loop ((i 0))
-      (cond ((>= i samples)
-	     v)
-	    (#t (begin (s16vector-set! v i (max -32768 (min 32767 (gen i))))
-		       (loop (+ i 1))))))))
-
-(define (sound-render-s16vector-st gen samples)
-  (let* ((s2 (* samples 2))
-	 
-	 (v (make-s16vector s2)))
-    (let loop ((i 0))
-      (cond ((>= i s2)
-	     v)
-	    (#t (let* ((r (gen i)))
-		  (s16vector-set! v i (max -32768 (min 32767 (car r))))
-		  (s16vector-set! v (+ i 1) (max -32768 (min 32767 (cadr r))))
-		  (loop (+ i 2))))))))
+    (lambda (t)
+      (cond
+       ((< t 0)
+	0)
+       ((< t a)
+	(ramp-a t))
+       ((< t (+ a d))
+	(ramp-d t))
+       ((< t len)
+	s)
+       (else
+	(ramp-r t))))))
 
 ; Mix generator. Mixes the output of two generators together.
 
-(define-valk-gen mix-gen (mix i funcs)
-  (apply +
-	 (map (lambda (f) (f i)) funcs)))
+(define (sig+ f1 f2)
+  (lambda (t)
+    (+ (f1 t)
+       (f2 t))))
 
-; Converts mono output to stereo output.
+(define (sig* f1 f2)
+  (lambda (t)
+    (* (f1 t)
+       (f2 t))))
 
-(define-valk-gen mono->stereo-gen (mono->stereo i f)
-  (let* ((p (change-ampl i f 0.5)))
-    (list p p)))
+; Amplitude changer. Multiply amplitude of output of generator func by factor.
+
+(define (change-ampl f factor)
+  (sig* f (constantly factor)))
+
+; Sample offset generator. Shifts the output of func forward in time by t
+; seconds.
+
+(define (sample-offset f offset)
+  (lambda (t)
+    (if (< t offset)
+	0.0
+	(f (- t offset)))))
+
+
+; The u16clamp function takes a signal value and clamps it to the range
+; [-1.0,1.0], then returns as a result an unsigned representation of the
+; signed, clamped value scaled to an exact integer between -32768 and 32767.
+; "It's gonna be clamp this, clamp that, bada climp, bada clamp!"
+;                  --Clamps, from Futurama's Robot Mafia
+
+(define (u16clamp x)
+  (bitwise-and
+   (inexact->exact
+    (floor
+     (* (min 1.0
+	     (max -1.0 x))
+	32767)))
+   #xffff))
+
+
+(define (sound-render-u16vector gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate)) ; thanks to Brad Lucier
+	 (sampleinc (/ 1.0 samplerate)) 
+	 (v (make-u16vector (* samples))))
+    (let loop ((i 0)
+	       (j 0.0))
+      (cond ((>= i samples)
+	     v)
+	    (else (begin (u16vector-set! v i
+					 (u16clamp
+					  (gen j)))       
+		       (loop (+ i 1) (+ j sampleinc))))))))
+
+
+(define (sound-render-f32vector gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
+	 (v (make-f32vector (* samples))))
+    (let loop ((i 0)
+	       (j 0.0))
+      (cond ((>= i samples)
+	     v)
+	    (else (begin (f32vector-set! v i
+					(gen j))
+			 
+		       (loop (+ i 1) (+ j sampleinc))))))))
+
+
+(define (sound-render-u16vector-st gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate))))
+	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
+	 (s2 (* samples 2))
+	 
+	 (v (make-u16vector s2)))
+    (let loop ((i 0)
+	       (j 0.0))
+      (cond ((>= i samples)
+	     v)
+	    (else (call-with-values (lambda ()
+				    (gen j))
+		  
+		    (lambda (a b)
+		      (u16vector-set! v (* i 2)
+				     (u16clamp a))
+		      (u16vector-set! v (+ (* i 2) 1)
+				       (u16clamp b))))
+		  (loop (+ i 1) (+ j sampleinc)))))))
+
+(define (sound-render-f32vector-st gen t samplerate)
+  (let* (
+	 (samples (inexact->exact (floor (* t samplerate)))) 
+	 (samplerate (exact->inexact samplerate))
+	 (sampleinc (/ 1.0 samplerate)) 
+
+	 (s2 (* samples 2))
+	 
+	 (v (make-f32vector s2)))
+    (let loop ((i 0) (j 0.0))
+      (cond ((>= i samples)
+	     v)
+	    (else (call-with-values (lambda ()
+				    (gen j))
+		  
+		    (lambda (a b)
+		      (f32vector-set! v (* i 2)
+				      a)
+		      (f32vector-set! v (+ (* i 2) 1)
+				      b)))
+		  (loop (+ i 1) (+ j sampleinc)))))))
 
 ; Stereo mix generator: same as above but with 2 channels.
 
-(define-valk-gen stereo-mix-gen (stereo-mix i funcs)
-  (letrec ((st2+ (lambda (x y)
-		    (list (+ (car x)
-			      (car y))
-			  (+ (cadr x)
-			     (cadr y)))))
-	   (st+ (lambda args (if (null? args)
-				 '(0 0)
-				 (st2+ (car args)
-				        (apply st+ (cdr args)))))))
-      (apply st+
-	 (map (lambda (f) (f i)) funcs))))
+(define (stereo-sig+ f1 f2)
+  (lambda (t)
+    (call-with-values (lambda ()
+			(f1 t))
+      (lambda (a b)
+	(call-with-values (lambda ()
+			    (f2 t))
+	  (lambda (c d)
+	    (values (+ a c)
+		    (+ b d))))))))
+
+(define (stereo left right)
+  (lambda (t)
+    (values (left t)
+	    (right t))))
+
+; Converts mono output to stereo output.
+
+(define (mono->stereo f)
+  (let* ((f2 (change-ampl f 0.5)))
+    (stereo f2 f2)))
+
+(define (left-channel f)
+  (lambda (t)
+    (call-with-values (lambda ()
+			(f t))
+      (lambda (a b)
+	a))))
+
+(define (right-channel f)
+  (lambda (t)
+    (call-with-values (lambda ()
+			(f t))
+      (lambda (a b)
+	b))))
+
+(define (stereo-change-ampl f factor)
+  (stereo
+   (change-ampl (left-channel f)
+		factor)
+   (change-ampl (right-channel f)
+		factor)))
 
 ; Pan generator. Converts a mono signal to stereo; lets you move it left or
 ; right.
+; -1.0 is full left, +1.0 is full right.
+(define (pan f factor)
+  (let* ((fac2 (* factor 0.5)))
+    (stereo
+     (change-ampl f
+		  (- 0.5 fac2))
+     (change-ampl f (+ 0.5 fac2)))))
 
-(define-valk-gen pan-gen (pan i f p)
-  (cond
-   ((zero? p) (mono->stereo i f))
-   ((<= p -1)
-    (list (f i)
-	  0
-	  ))
-   ((>= p 1)
-    (list 0 (f i)))
-   (#t
 
-      (list (change-ampl i f (- 0.5 (/ p 2))
-			      )
-	    (change-ampl i f (+ 0.5 (/ p 2))
-			      )))))
+(define (unsigned->signed16 n) (if (> n 32767) (- n 65536) n))
+
+;(define (unsigned->signed16 n)
+;(- n (arithmetic-shift (bitwise-and n 32768)
+;1)))
+
+
+
+(define (sampled-sound-u16 vec rate)
+  (let* ((l (u16vector-length vec)))
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (or
+	     (< c 0)
+	     (>= c l))
+	    0
+	    (/ (unsigned->signed16 (u16vector-ref vec c))
+	       32767.0))))))
+
+
+(define (sampled-sound vec rate)
+  (let* ((l (f32vector-length vec)))
+    
+    
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (or (< c 0)
+		(>= c l))
+	    0
+	    (f32vector-ref vec c))))))
+
+
+(define (sampled-sound-looping vec rate)
+  (let* ((l (f32vector-length vec)))  
+    (lambda (i)
+      (let ((c (inexact->exact (floor (* i rate)))))
+	(if (< c 0)
+	    0
+	    (f32vector-ref vec (modulo c l)))))))
+
+(define (make-wavetable func nsamps)
+  (sound-render-f32vector func 1.0 nsamps))
+
+(define (harmonics . x)
+  (let loop
+      ((i 1.0)
+       (l x)
+       (f silence))
+    
+    (cond
+     ((null? l)
+      f)
+     (else
+      (loop (+ i 1)
+	    (cdr l)
+	    (sig+ f (sine-wave i (car l))))))))
+
+(define (wavetable-function func nsamps)
+  (let* ((wt (make-wavetable func nsamps)))
+    (lambda (freq vol)
+      (change-ampl (sampled-sound-looping wt (* freq nsamps))
+		   vol))))
 

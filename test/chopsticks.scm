@@ -19,7 +19,7 @@
 		 square-wave
 		))
 
-(write-raw "chopsticks.raw"
+(write-wav "chopsticks.wav"
 	   (mix
 	    (play-roll *inst* *chopsticks-note-table1* 0)
 	    (play-roll *inst* *chopsticks-note-table2* 0))

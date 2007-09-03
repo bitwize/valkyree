@@ -25,7 +25,7 @@
 
 
 
-(write-raw "chopsticks.raw" (mix
+(write-wav "chopsticks.wav" (mix
 			     (play-roll *inst* *chopsticks-note-table1* 0)
 			     (play-roll *inst* *chopsticks-note-table2* 0))
 	  8.0 22050)
