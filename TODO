@@ -1,0 +1,40 @@
+* Generators
+
+** Function generators/oscillators
+
+*** Sine - done
+*** Square - done
+*** Saw - done
+*** Triangle - done
+*** Band-limited square
+*** Band-limited triangle
+*** Band-limited saw
+
+** Sample-based generators
+
+*** Noninterpolating - done?
+*** Interpolating
+
+* Transformers
+
+** Signal addition and multiplication - done
+** Volume modulation - done
+** Pitch modulation - done 
+** Filters
+
+*** Low pass
+*** Band pass
+*** High pass
+
+* Sequencer
+
+* I/O
+
+** WAV file output - done
+** WAV file input - done?
+
+* Instrument library
+
+* Other
+
+** Write some damn music with this thing (high priority)

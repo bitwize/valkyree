@@ -12,19 +12,17 @@
 (define silence (constantly 0))
 
 
-; Sine wave generator.
+; Sine wave oscillator.
 ; Produces a waveform according to the following function:
 ; s(t) = A cos ωt + p where ω = 2πf
 
-(define (sine-wave freq ampl . phase)
-  (let ((phase (if (null? phase)
-		   0
-		   (car phase))))
+(define (sine-oscillator freq ampl phase)
+
     (lambda (t)
-      (* ampl (cos (+ phase (ang-freq (* freq t))))))))
+      (* ampl (cos (+ phase (ang-freq (* freq t)))))))
 
 
-; Square wave generator.
+; Square wave oscillator.
 ;
 ; Produces a waveform according to the function:
 ;        | 1 if r is less than d
@@ -34,30 +32,36 @@
 ; where r is where t is in the current period
 ;       d is the duty cycle
 ;
-(define (square-wave freq ampl . duty)
-  (let ((duty (if (null? duty)
-		   0.5
-		   (car duty))))
+(define (square-oscillator freq ampl duty)
+
     (lambda (t)
       (let* ((t2 (* t freq))
 	     (r (- t2 (floor t2))))
 	(* ampl
 	   (if (< r duty)
 	       1.0
-	       -1.0))))))
+	       -1.0)))))
 
-; Sawtooth wave generator.
+; Sawtooth wave oscillator.
 ; Produces a waveform that looks like this:
 ;     /|   /|   /|
 ;    / |  / |  / |
-;   /  | /  | /  |
-;  /   |/   |/   |
+;      | /  | /  | /
+;      |/   |/   |/
 
-(define (saw-wave freq vel)
+(define (saw-oscillator freq ampl)
   (lambda (t)
     (let* ((t2 (* freq t)))
-      (* 2 vel (- t2
-		  (floor (+ 0.5 t2)))))))
+      (* 2 ampl
+	 (- t2 (floor (+ 0.5 t2)))))))
+
+(define (triangle-oscillator freq ampl)
+  (lambda (t)
+    (let ((t (* t freq)))
+      (* ampl
+	 (- 1 (* 4 (let ((r (+ t 0.25)))
+		  (abs (- 0.5 (- r (truncate r)))))))))))
+
 
 ; ADSR (attack, decay, sustain, release) envelope structure.
 ; Useful for making ADSR functions to control the volume output of notes.
@@ -123,6 +127,20 @@
 
 (define (change-ampl f factor)
   (sig* f (constantly factor)))
+
+; Pitch modulator. Alters pitch of generator g1 by factor from generator g2
+; (and does so in a way that doesn't munge the waveform).
+
+(define (pitch-modulate f1 f2)
+  (let ((p #f)
+	(r #f))
+    (lambda (t)
+      (let ((t2 (if (not p)
+		    t
+		    (+ p (* (f2 t) (- t r))))))
+	(set! p t2)
+	(set! r t)
+	(f1 p)))))
 
 ; Sample offset generator. Shifts the output of func forward in time by t
 ; seconds.
@@ -284,12 +302,6 @@
 
 (define (unsigned->signed16 n) (if (> n 32767) (- n 65536) n))
 
-;(define (unsigned->signed16 n)
-;(- n (arithmetic-shift (bitwise-and n 32768)
-;1)))
-
-
-
 (define (sampled-sound-u16 vec rate)
   (let* ((l (u16vector-length vec)))
     (lambda (i)
@@ -325,7 +337,7 @@
 (define (make-wavetable func nsamps)
   (sound-render-f32vector func 1.0 nsamps))
 
-(define (harmonics . x)
+(define (harmonics fund ampl . x)
   (let loop
       ((i 1.0)
        (l x)
@@ -334,10 +346,14 @@
     (cond
      ((null? l)
       f)
+     ((not (car l))
+      (loop (+ i 1)
+	    f
+	    (cdr l)))
      (else
       (loop (+ i 1)
 	    (cdr l)
-	    (sig+ f (sine-wave i (car l))))))))
+	    (sig+ f (sig* (sine-oscillator (* fund i) ampl 0.0) (car l))))))))
 
 (define (wavetable-function func nsamps)
   (let* ((wt (make-wavetable func nsamps)))

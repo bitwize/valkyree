@@ -1,2 +1,2 @@
-(include "../gambit/valkyree.scm")
+(include "../valkyree-gambit.scm")
 (include "./chopsticks-adsr.scm")

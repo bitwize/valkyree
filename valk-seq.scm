@@ -110,7 +110,7 @@
        (loop (cdr l)  
 	     (if (zero? n)
 		 f
-		 (mix f
+		 (sig+ f
 		      (play-tone inst
 				 n v m d)))
 	     (+ m d))))))

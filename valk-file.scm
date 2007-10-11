@@ -55,8 +55,6 @@
 	vec
 	(subu8vector vec 0 r))))
 
-
-
 (define (file->u8vector fl)
   (let ((p (open-input-file fl)))
     (let loop ((l '()))
