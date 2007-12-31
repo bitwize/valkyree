@@ -1,117 +1,24 @@
-; Some important constants and frequency conversions.
+; Welcome to Valkyree.
 
-(define *pi* (* (atan 1) 4))
-(define *2pi* (* (atan 1) 8))
-(define (ang-freq f) (* f *2pi*))
+; Valkyree is a sound and music synthesis system designed to work with units
+; of sound from the very basic -- simple waveforms -- to the most complex of
+; compositions. It is intended to favor correctness over speed, although some
+; basic optimizations should be easy to perform.
 
+; "The design of the central data structure of an app determines the quality
+; of the app, in every way." --Dave Winer
 
-(define (constantly x)
-  (lambda t
-    x))
+; With this thought in mind we will here introduce the two basic data struc-
+; tures of Valkyree: signals, and sample-vectors.
 
-(define silence (constantly 0))
+; A signal is simply a function taking ℝ into ℝ, where the input represents
+; time and the output represents a magnitude. This lets us describe waveforms
+; in the abstract as functions of time. The magnitude of a signal is assumed to
+; be within the range -1.0 to 1.0. Signals may exceed this range; however they
+; will be clipped before output when rendering the sound.
 
-
-; Sine wave oscillator.
-; Produces a waveform according to the following function:
-; s(t) = A cos ωt + p where ω = 2πf
-
-(define (sine-oscillator freq ampl phase)
-
-    (lambda (t)
-      (* ampl (cos (+ phase (ang-freq (* freq t)))))))
-
-
-; Square wave oscillator.
-;
-; Produces a waveform according to the function:
-;        | 1 if r is less than d
-; s(t) = |
-;        | 0 otherwise
-;
-; where r is where t is in the current period
-;       d is the duty cycle
-;
-(define (square-oscillator freq ampl duty)
-
-    (lambda (t)
-      (let* ((t2 (* t freq))
-	     (r (- t2 (floor t2))))
-	(* ampl
-	   (if (< r duty)
-	       1.0
-	       -1.0)))))
-
-; Sawtooth wave oscillator.
-; Produces a waveform that looks like this:
-;     /|   /|   /|
-;    / |  / |  / |
-;      | /  | /  | /
-;      |/   |/   |/
-
-(define (saw-oscillator freq ampl)
-  (lambda (t)
-    (let* ((t2 (* freq t)))
-      (* 2 ampl
-	 (- t2 (floor (+ 0.5 t2)))))))
-
-(define (triangle-oscillator freq ampl)
-  (lambda (t)
-    (let ((t (* t freq)))
-      (* ampl
-	 (- 1 (* 4 (let ((r (+ t 0.25)))
-		  (abs (- 0.5 (- r (truncate r)))))))))))
-
-
-; ADSR (attack, decay, sustain, release) envelope structure.
-; Useful for making ADSR functions to control the volume output of notes.
-
-(define-record-type :adsr-envelope
-  (make-adsr-envelope a d s r)
-  adsr-envelope?
-  (a adsr-attack)
-  (d adsr-decay)
-  (s adsr-sustain)
-  (r adsr-release))
-
-(define (ramp start end start-time length)
-  (let* ((fac (/ (- end start) length))
-	 (end-time (+ start-time length)))
-    (lambda (t)
-      (if (> t start-time)
-	  (if (or (<= length 0)
-		  (>= t end-time))
-	      end
-	      (+ start
-		 (*
-		  fac
-		  (- t start-time))))
-	  start))))
-
-
-(define (adsr-envelope-gen e len)
-  (let* ((a (adsr-attack e))
-	 (d (adsr-decay e))
-	 (s (adsr-sustain e))
-	 (r (adsr-release e))
-	 (ramp-a (ramp 0.0 1.0 0.0 a))
-	 (ramp-d (ramp 1.0 s a d))
-	 (ramp-r (ramp s 0.0 len r)))
-    
-    (lambda (t)
-      (cond
-       ((< t 0)
-	0)
-       ((< t a)
-	(ramp-a t))
-       ((< t (+ a d))
-	(ramp-d t))
-       ((< t len)
-	s)
-       (else
-	(ramp-r t))))))
-
-; Mix generator. Mixes the output of two generators together.
+; You can perform basic math on signals, such as adding them or multiplying
+; them. You can also multiply a signal by a scalar value.
 
 (define (sig+ f1 f2)
   (lambda (t)
@@ -123,149 +30,79 @@
     (* (f1 t)
        (f2 t))))
 
-; Amplitude changer. Multiply amplitude of output of generator func by factor.
+(define (sig-scale f1 c)
+  (lambda (t)
+    (* (f1 t)
+       c)))
 
-(define (change-ampl f factor)
-  (sig* f (constantly factor)))
+; You can also scale signals in the other direction: the time direction.
 
-; Pitch modulator. Alters pitch of generator g1 by factor from generator g2
-; (and does so in a way that doesn't munge the waveform).
+(define (time-scale f1 c)
+  (lambda (t)
+    (f1 (* c t))))
 
-(define (pitch-modulate f1 f2)
-  (let ((p #f)
-	(r #f))
-    (lambda (t)
-      (let ((t2 (if (not p)
-		    t
-		    (+ p (* (f2 t) (- t r))))))
-	(set! p t2)
-	(set! r t)
-	(f1 p)))))
+; You can shift signals in time. Signals which are time-shifted forward are
+; left-padded with silence.
 
-; Sample offset generator. Shifts the output of func forward in time by t
-; seconds.
-
-(define (sample-offset f offset)
+(define (time-shift f offset)
   (lambda (t)
     (if (< t offset)
 	0.0
 	(f (- t offset)))))
 
+; Here are some basic signals: oscillators which produce _ideal_ sine, square,
+; sawtooth and triangle waves. The square, sawtooth, and triangle oscillators
+; are completely fine for LFO purposes; but are not appropriate for use in
+; tone generation because they are ideal and so have infinite harmonics. When
+; sampled they will lead to aliasing. Later we will introduce oscillators which
+; are more appropriate for use in tone generation.
 
-; The u16clamp function takes a signal value and clamps it to the range
-; [-1.0,1.0], then returns as a result an unsigned representation of the
-; signed, clamped value scaled to an exact integer between -32768 and 32767.
-; "It's gonna be clamp this, clamp that, bada climp, bada clamp!"
-;                  --Clamps, from Futurama's Robot Mafia
+(define (sine-oscillator freq ampl phase)
 
-(define (u16clamp x)
-  (bitwise-and
-   (inexact->exact
-    (floor
-     (* (min 1.0
-	     (max -1.0 x))
-	32767)))
-   #xffff))
+    (lambda (t)
+      (* ampl (sin (+ phase (ang-freq (* freq t)))))))
 
 
-(define (sound-render-u16vector gen t samplerate)
-  (let* (
-	 (samples (inexact->exact (floor (* t samplerate))))
-	 (samplerate (exact->inexact samplerate)) ; thanks to Brad Lucier
-	 (sampleinc (/ 1.0 samplerate)) 
-	 (v (make-u16vector (* samples))))
-    (let loop ((i 0)
-	       (j 0.0))
-      (cond ((>= i samples)
-	     v)
-	    (else (begin (u16vector-set! v i
-					 (u16clamp
-					  (gen j)))       
-		       (loop (+ i 1) (+ j sampleinc))))))))
+(define (ideal-square-oscillator freq ampl duty)
 
+    (lambda (t)
+      (let* ((t2 (* t freq))
+	     (r (- t2 (floor t2))))
+	(* ampl
+	   (if (< r duty)
+	       1.0
+	       -1.0)))))
 
-(define (sound-render-f32vector gen t samplerate)
-  (let* (
-	 (samples (inexact->exact (floor (* t samplerate))))
-	 (samplerate (exact->inexact samplerate))
-	 (sampleinc (/ 1.0 samplerate)) 
-	 (v (make-f32vector (* samples))))
-    (let loop ((i 0)
-	       (j 0.0))
-      (cond ((>= i samples)
-	     v)
-	    (else (begin (f32vector-set! v i
-					(gen j))
-			 
-		       (loop (+ i 1) (+ j sampleinc))))))))
-
-
-(define (sound-render-u16vector-st gen t samplerate)
-  (let* (
-	 (samples (inexact->exact (floor (* t samplerate))))
-	 (samplerate (exact->inexact samplerate))
-	 (sampleinc (/ 1.0 samplerate)) 
-	 (s2 (* samples 2))
-	 
-	 (v (make-u16vector s2)))
-    (let loop ((i 0)
-	       (j 0.0))
-      (cond ((>= i samples)
-	     v)
-	    (else (call-with-values (lambda ()
-				    (gen j))
-		  
-		    (lambda (a b)
-		      (u16vector-set! v (* i 2)
-				     (u16clamp a))
-		      (u16vector-set! v (+ (* i 2) 1)
-				       (u16clamp b))))
-		  (loop (+ i 1) (+ j sampleinc)))))))
-
-(define (sound-render-f32vector-st gen t samplerate)
-  (let* (
-	 (samples (inexact->exact (floor (* t samplerate)))) 
-	 (samplerate (exact->inexact samplerate))
-	 (sampleinc (/ 1.0 samplerate)) 
-
-	 (s2 (* samples 2))
-	 
-	 (v (make-f32vector s2)))
-    (let loop ((i 0) (j 0.0))
-      (cond ((>= i samples)
-	     v)
-	    (else (call-with-values (lambda ()
-				    (gen j))
-		  
-		    (lambda (a b)
-		      (f32vector-set! v (* i 2)
-				      a)
-		      (f32vector-set! v (+ (* i 2) 1)
-				      b)))
-		  (loop (+ i 1) (+ j sampleinc)))))))
-
-; Stereo mix generator: same as above but with 2 channels.
-
-(define (stereo-sig+ f1 f2)
+(define (ideal-saw-oscillator freq ampl)
   (lambda (t)
-    (call-with-values (lambda ()
-			(f1 t))
-      (lambda (a b)
-	(call-with-values (lambda ()
-			    (f2 t))
-	  (lambda (c d)
-	    (values (+ a c)
-		    (+ b d))))))))
+    (let* ((t2 (* freq t)))
+      (* 2 ampl
+	 (- t2 (floor (+ 0.5 t2)))))))
+
+(define (ideal-triangle-oscillator freq ampl)
+  (lambda (t)
+    (let ((t (* t freq)))
+      (* ampl
+	 (- 1 (* 4 (let ((r (+ t 0.25)))
+		  (abs (- 0.5 (- r (truncate r)))))))))))
+
+; Stereo signals are functions from ℝ to ℝ × ℝ. In Scheme they yield two values
+; according to the Scheme conventions for multiple-value return. We could
+; construct an n-channel signal in this manner by changing the function's co-
+; domain to ℝ^n, but for now Valkyree only provides easy handling for mono or
+; 2-channel stereo.
+
+; Here we provide facilities for constructing stereo signals from one or two
+; mono signals, or destructuring a stereo signal into its two constituent
+; channels.
 
 (define (stereo left right)
   (lambda (t)
     (values (left t)
 	    (right t))))
 
-; Converts mono output to stereo output.
-
 (define (mono->stereo f)
-  (let* ((f2 (change-ampl f 0.5)))
+  (let* ((f2 (sig-scale f 0.5)))
     (stereo f2 f2)))
 
 (define (left-channel f)
@@ -282,82 +119,135 @@
       (lambda (a b)
 	b))))
 
-(define (stereo-change-ampl f factor)
-  (stereo
-   (change-ampl (left-channel f)
-		factor)
-   (change-ampl (right-channel f)
-		factor)))
+; You can add two stereo signals, or multiply a signal by a scalar, as with
+; mono signals.
 
-; Pan generator. Converts a mono signal to stereo; lets you move it left or
+(define (stereo-sig+ f1 f2)
+  (lambda (t)
+    (call-with-values (lambda ()
+			(f1 t))
+      (lambda (a b)
+	(call-with-values (lambda ()
+			    (f2 t))
+	  (lambda (c d)
+	    (values (+ a c)
+		    (+ b d))))))))
+
+(define (stereo-sig-scale f factor)
+  (lambda (t)
+    (receive (l r) (f t)
+	     (values (* l factor) (* r factor)))))
+
+; You can also create a stereo signal by panning a mono signal to the left or
 ; right.
-; -1.0 is full left, +1.0 is full right.
+
 (define (pan f factor)
   (let* ((fac2 (* factor 0.5)))
     (stereo
-     (change-ampl f
+     (sig-scale f
 		  (- 0.5 fac2))
-     (change-ampl f (+ 0.5 fac2)))))
+4     (sig-scale f (+ 0.5 fac2)))))
+
+; A sample-vector is a vector of samples from a signal over some arbitrary
+; interval, accompanied by a sampling frequency (in a whole number of hertz).
+; These samples represent some portion of a signal in the time domain. They are
+; a more concrete representation of a digital signal; i.e., they are closer to
+; your computer soundcard's representation of a signal as a sequence of sample
+; values. They are thus also amenable to DSP techniques such as
+; discrete frequency-domain transforms.
+
+; Samples in a sample-vector are 32-bit floating point, signed, zero-centered,
+; and unit-normalized. That means they range from -1.0 to 1.0 with zero in the
+; middle. They are stored in an underlying SRFI 4 f32vector.
+
+(define-record-type :sample-vector
+  (really-make-sample-vector vec freq)
+  sample-vector?
+  (vec sample-vector-underlying-f32vector)
+  (freq sample-vector-sampling-frequency))
+
+(define (sample-vector-ref svec n)
+  (f32vector-ref (sample-vector-underlying-f32vector svec) n))
+
+(define (sample-vector-length svec)
+  (f32vector-length (sample-vector-underlying-f32vector svec)))
 
 
-(define (unsigned->signed16 n) (if (> n 32767) (- n 65536) n))
+; A spectrum-vector is like a sample-vector, but in the frequency domain.
+; The sampling frequency represents the Nyquist frequency of the
+; resulting spectrum (twice the max frequency in the spectrum).
 
-(define (sampled-sound-u16 vec rate)
-  (let* ((l (u16vector-length vec)))
-    (lambda (i)
-      (let ((c (inexact->exact (floor (* i rate)))))
-	(if (or
-	     (< c 0)
-	     (>= c l))
-	    0
-	    (/ (unsigned->signed16 (u16vector-ref vec c))
-	       32767.0))))))
+(define-record-type :spectrum-vector
+  (really-make-spectrum-vector vec freq)
+  spectrum-vector?
+  (vec spectrum-vector-underlying-f32vector)
+  (freq spectrum-vector-sampling-frequency))
+
+(define (spectrum-vector-ref svec n)
+  (f32vector-ref (spectrum-vector-underlying-f32vector svec) n))
+
+(define (spectrum-vector-length svec)
+  (f32vector-length (spectrum-vector-underlying-f32vector svec)))
+
+; Procedures to convert between the time and frequency domains using the
+; discrete cosine transform types II and III. (Sometimes called DCT and inverse
+; DCT.) These are strictly real-valued variations of the more general discrete
+; Fourier transform.
+
+; These implementations are both naïve and literal-minded. They are bound to be
+; replaced with something more optimized in the future.
+
+; The public Valkyree APIs for handling time and frequency domain conversions
+; are in the samples->spectrum/* functions below.
+
+(define (discrete-cosine-transform data-f32vector)
+  (let* ((len (f32vector-length data-f32vector))
+	 (dct-f32vector (make-f32vector len)))
+    (let loop ((k 0))
+      (cond
+       ((>= k len) dct-f32vector)
+       (else
+	(f32vector-set! dct-f32vector k
+			(sigma 0 (- len 1)
+			       (lambda (n)
+				 (*
+				  (f32vector-ref data-f32vector n)
+				  (cos (/ (* pi (+ n 0.5) k) len))))))
+	(loop (+ k 1)))))))
 
 
-(define (sampled-sound vec rate)
-  (let* ((l (f32vector-length vec)))
-    
-    
-    (lambda (i)
-      (let ((c (inexact->exact (floor (* i rate)))))
-	(if (or (< c 0)
-		(>= c l))
-	    0
-	    (f32vector-ref vec c))))))
+(define (inverse-discrete-cosine-transform dct-f32vector)
+  (let* ((len (f32vector-length dct-f32vector))
+	 (data-f32vector (make-f32vector len)))
+    (let loop ((k 0))
+      (cond
+       ((>= k len) data-f32vector)
+       (else
+	(f32vector-set! 
+	 data-f32vector k
+	 (/ (* 2 (+ (* 0.5 (f32vector-ref dct-f32vector 0))
+		    (sigma 1 (- len 1)
+			   (lambda (n)
+			     (*
+			      (f32vector-ref dct-f32vector n)
+			      (cos (/ (* pi n (+ k 0.5)) len)))))))
+	    len))
+	(loop (+ k 1)))))))
 
+; You can convert sample vectors to spectrum vectors by way of the
+; discrete cosine transform.
 
-(define (sampled-sound-looping vec rate)
-  (let* ((l (f32vector-length vec)))  
-    (lambda (i)
-      (let ((c (inexact->exact (floor (* i rate)))))
-	(if (< c 0)
-	    0
-	    (f32vector-ref vec (modulo c l)))))))
+(define (samples->spectrum/cos sampvec)
+  (let ((freq (sample-vector-frequency sampvec)))
+    (really-make-spectrum-vector
+     (discrete-cosine-transform
+      (sample-vector-underlying-f32vector sampvec))
+     freq)))
 
-(define (make-wavetable func nsamps)
-  (sound-render-f32vector func 1.0 nsamps))
-
-(define (harmonics fund ampl . x)
-  (let loop
-      ((i 1.0)
-       (l x)
-       (f silence))
-    
-    (cond
-     ((null? l)
-      f)
-     ((not (car l))
-      (loop (+ i 1)
-	    f
-	    (cdr l)))
-     (else
-      (loop (+ i 1)
-	    (cdr l)
-	    (sig+ f (sig* (sine-oscillator (* fund i) ampl 0.0) (car l))))))))
-
-(define (wavetable-function func nsamps)
-  (let* ((wt (make-wavetable func nsamps)))
-    (lambda (freq vol)
-      (change-ampl (sampled-sound-looping wt (* freq nsamps))
-		   vol))))
+(define (spectrum->samples/cos specvec)
+  (let ((freq (spectrum-vector-frequency specvec)))
+    (really-make-sample-vector
+     (inverse-discrete-cosine-transform
+      (spectrum-vector-underlying-f32vector specvec))
+     freq)))
 

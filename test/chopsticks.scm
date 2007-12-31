@@ -16,11 +16,11 @@
 		    294 294 294 294 262 294 262 262 262 262))))
 
 (define *inst* (make-simple-inst
-		 square-wave
+		 (lambda (f v) (square-oscillator f v 0.5))
 		))
 
 (write-wav "chopsticks.wav"
-	   (mix
+	   (sig+
 	    (play-roll *inst* *chopsticks-note-table1* 0)
 	    (play-roll *inst* *chopsticks-note-table2* 0))
 	   8.0 22050)

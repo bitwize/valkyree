@@ -1,13 +1,13 @@
 (define *htf* (expt 2 (/ 1.0 12.0)))
 
-(define *note-table*
-  (let* ((a 220))
+(define note-table
+  (let ((a 55.0))
     (let loop
-	((c -12) (v (make-vector 60 0.0)))
-      (cond ((>= c 48) v)
-	    (#t (vector-set! v (+ c 12) (* a (expt *htf* c)))
-		(loop (+ c 1) v)
-		)))))
+	((c 0) (v (make-vector 72 0.0)))
+      (cond ((>= c 72) v)
+	    (else (vector-set! v c (* a (expt *htf* c)))
+		  (loop (+ c 1) v)
+		  )))))
 
 
 (define (note-length beats bpm)
@@ -16,39 +16,18 @@
 (define current-bpm
   (make-parameter 120))
 
-(define (make-simple-inst f . specifier)
-  (let* ((nl
-	  (if 
-	   (null? specifier) 0.875
-	   (case (car specifier)
-	     ((legato)
-	      1.0)
-	     ((staccato)
-	      0.5)
-	     (else 0.875))
-	   
-	   )))
-    (lambda (freq vel len)
-      (let* ((f2 (f freq vel)) (len2 (* len nl)))
-	(lambda (i)
-	  (if (> i len2) 0 (f2 i)))))))
+(define (make-simple-inst f)
+  (lambda (freq vel len)
+    (let* ((f2 (f freq vel)))
+      (lambda (i)
+	(if (> i len) 0 (f2 i))))))
 
-(define (make-adsr-inst f aenv . specifier)
-  (let* ((nl
-	  (if
-	   (null? specifier) 0.875
-	   (case (car specifier)
-	     ((legato)
-	      1.0)
-	     ((staccato)
-	      0.5)
-	     (else 0.875)))))
-    
+(define (make-adsr-inst f aenv . specifier)    
     (lambda (freq vel len)
-      (let* ((f2 (f freq vel)) (len2 (* len nl)))
+      (let* ((f2 (f freq vel)))
 	(sig*
 	 f2
-	 (adsr-envelope-gen aenv len2))))))
+	 (adsr-envelope-gen aenv len)))))
 
 (define-record-type :vtrack
   (make-vtrack qps elist)
