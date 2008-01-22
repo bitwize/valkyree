@@ -17,6 +17,12 @@
 ; be within the range -1.0 to 1.0. Signals may exceed this range; however they
 ; will be clipped before output when rendering the sound.
 
+; Some important constants and frequency conversions.
+
+(define pi (* (atan 1) 4))
+(define twopi (* (atan 1) 8))
+(define (ang-freq f) (* f twopi))
+
 ; You can perform basic math on signals, such as adding them or multiplying
 ; them. You can also multiply a signal by a scalar value.
 
@@ -49,6 +55,14 @@
     (if (< t offset)
 	0.0
 	(f (- t offset)))))
+
+; Some trivial signals which are actually constant functions.
+
+(define (constantly x)
+  (lambda t
+    x))
+
+(define silence (constantly 0))
 
 ; Here are some basic signals: oscillators which produce _ideal_ sine, square,
 ; sawtooth and triangle waves. The square, sawtooth, and triangle oscillators
@@ -161,7 +175,7 @@
 ; middle. They are stored in an underlying SRFI 4 f32vector.
 
 (define-record-type :sample-vector
-  (really-make-sample-vector vec freq)
+  (make-sample-vector vec freq)
   sample-vector?
   (vec sample-vector-underlying-f32vector)
   (freq sample-vector-sampling-frequency))
@@ -172,13 +186,24 @@
 (define (sample-vector-length svec)
   (f32vector-length (sample-vector-underlying-f32vector svec)))
 
+(define (make-sample-vector-from-sig f start len freq)
+  (let* ((vl (inexact->exact (floor (* len freq))))
+	 (v (make-f32vector vl))
+	 (freq2 (exact->inexact freq)))
+
+    (let loop
+	((i 0))
+      (cond
+       ((>= i vl) (really-make-sample-vector v freq))
+       (else (begin (f32vector-set! v i (f (+ start (/ i freq2))))
+		    (loop (+ i 1))))))))
 
 ; A spectrum-vector is like a sample-vector, but in the frequency domain.
 ; The sampling frequency represents the Nyquist frequency of the
 ; resulting spectrum (twice the max frequency in the spectrum).
 
 (define-record-type :spectrum-vector
-  (really-make-spectrum-vector vec freq)
+  (make-spectrum-vector vec freq)
   spectrum-vector?
   (vec spectrum-vector-underlying-f32vector)
   (freq spectrum-vector-sampling-frequency))
