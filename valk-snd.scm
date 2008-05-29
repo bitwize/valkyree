@@ -17,6 +17,8 @@
 ; be within the range -1.0 to 1.0. Signals may exceed this range; however they
 ; will be clipped before output when rendering the sound.
 
+; Signals are also often called unit generators.
+
 ; Some important constants and frequency conversions.
 
 (define pi (* (atan 1) 4))
@@ -181,7 +183,7 @@
     (stereo
      (sig-scale f
 		  (- 0.5 fac2))
-4     (sig-scale f (+ 0.5 fac2)))))
+     (sig-scale f (+ 0.5 fac2)))))
 
 ; A sample-vector is a vector of samples from a signal over some arbitrary
 ; interval, accompanied by a sampling frequency (in a whole number of hertz).
@@ -207,7 +209,11 @@
 (define (sample-vector-length svec)
   (f32vector-length (sample-vector-underlying-f32vector svec)))
 
-(define (make-sample-vector-from-sig f start len freq)
+; A "fragment" of a signal may be retrieved as a sample-vector; this
+; is a vector of all the values of a signal in a given interval,
+; sampled with a particular frequency.
+
+(define (sig-get-fragment f start len freq)
   (let* ((vl (inexact->exact (floor (* len freq))))
 	 (v (make-f32vector vl))
 	 (freq2 (exact->inexact freq)))
@@ -215,13 +221,15 @@
     (let loop
 	((i 0))
       (cond
-       ((>= i vl) (really-make-sample-vector v freq))
+       ((>= i vl) (make-sample-vector v freq))
        (else (begin (f32vector-set! v i (f (+ start (/ i freq2))))
 		    (loop (+ i 1))))))))
 
-; A spectrum-vector is like a sample-vector, but in the frequency domain.
-; The sampling frequency represents the Nyquist frequency of the
-; resulting spectrum (twice the max frequency in the spectrum).
+
+
+; A spectrum-vector is like a sample-vector, but in the frequency
+; domain.  The sampling frequency represents the Nyquist frequency of
+; the resulting spectrum (twice the max frequency in the spectrum).
 
 (define-record-type :spectrum-vector
   (make-spectrum-vector vec freq)
@@ -235,16 +243,16 @@
 (define (spectrum-vector-length svec)
   (f32vector-length (spectrum-vector-underlying-f32vector svec)))
 
-; Procedures to convert between the time and frequency domains using the
-; discrete cosine transform types II and III. (Sometimes called DCT and inverse
-; DCT.) These are strictly real-valued variations of the more general discrete
-; Fourier transform.
+; Procedures to convert between the time and frequency domains using
+; the discrete cosine transform types II and III. (Sometimes called
+; DCT and inverse DCT.) These are strictly real-valued variations of
+; the more general discrete Fourier transform.
 
-; These implementations are both naïve and literal-minded. They are bound to be
-; replaced with something more optimized in the future.
+; These implementations are both naïve and literal-minded. They are
+; bound to be replaced with something more optimized in the future.
 
-; The public Valkyree APIs for handling time and frequency domain conversions
-; are in the samples->spectrum/* functions below.
+; The public Valkyree APIs for handling time and frequency domain
+; conversions are in the samples->spectrum/* functions below.
 
 (define (discrete-cosine-transform data-f32vector)
   (let* ((len (f32vector-length data-f32vector))
@@ -284,16 +292,15 @@
 ; discrete cosine transform.
 
 (define (samples->spectrum/cos sampvec)
-  (let ((freq (sample-vector-frequency sampvec)))
-    (really-make-spectrum-vector
+  (let ((freq (sample-vector-sampling-frequency sampvec)))
+    (make-spectrum-vector
      (discrete-cosine-transform
       (sample-vector-underlying-f32vector sampvec))
      freq)))
 
 (define (spectrum->samples/cos specvec)
-  (let ((freq (spectrum-vector-frequency specvec)))
-    (really-make-sample-vector
+  (let ((freq (spectrum-vector-sampling-frequency specvec)))
+    (make-sample-vector
      (inverse-discrete-cosine-transform
       (spectrum-vector-underlying-f32vector specvec))
      freq)))
-

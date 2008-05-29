@@ -51,3 +51,8 @@
     (u8vector-set! u8v 1 (bitwise-and (arithmetic-shift int -8) 255))
     u8v))
 
+(define (sigma lower upper fn)
+  (do ((i lower (+ i 1))
+       (a (fn lower) (+ a (fn i))))
+      ((>= i upper) a)
+    #f))
