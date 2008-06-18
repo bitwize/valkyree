@@ -30,18 +30,19 @@
 
 (define (sig+ f1 f2)
   (lambda (t)
-    (+ (f1 t)
+    (fl+ (f1 t)
        (f2 t))))
 
 (define (sig* f1 f2)
   (lambda (t)
-    (* (f1 t)
-       (f2 t))))
+    (fl* (f1 t)
+	 (f2 t))))
 
 (define (sig-scale f1 c)
-  (lambda (t)
-    (* (f1 t)
-       c)))
+  (let ((c (exact->inexact c)))
+    (lambda (t)
+      (fl* (f1 t)
+	   c))))
 
 ; You can also scale signals in the other direction: the time direction.
 
@@ -85,7 +86,7 @@
   (lambda t
     x))
 
-(define silence (constantly 0))
+(define silence (constantly 0.0))
 
 ; Here are some basic signals: oscillators which produce _ideal_ sine, square,
 ; sawtooth and triangle waves. The square, sawtooth, and triangle oscillators
@@ -95,33 +96,65 @@
 ; are more appropriate for use in tone generation.
 
 (define (sine-oscillator freq ampl phase)
-
+  (let ((freq (exact->inexact freq))
+	(ampl (exact->inexact ampl))
+	(phase (exact->inexact phase)))
     (lambda (t)
-      (* ampl (sin (+ phase (ang-freq (* freq t)))))))
+      (fl* ampl (sin (fl+ phase (ang-freq (fl* freq t))))))))
 
 
 (define (ideal-square-oscillator freq ampl duty)
-
+  (let ((freq (exact->inexact freq))
+	(ampl (exact->inexact ampl))
+	(duty (exact->inexact duty)))
     (lambda (t)
-      (let* ((t2 (* t freq))
-	     (r (- t2 (floor t2))))
-	(* ampl
-	   (if (< r duty)
-	       1.0
-	       -1.0)))))
+      (let* ((t2 (fl* t freq))
+	     (r (fl- t2 (floor t2))))
+	(fl* ampl
+	     (if (fl< r duty)
+		 1.0
+		 -1.0))))))
 
 (define (ideal-saw-oscillator freq ampl)
-  (lambda (t)
-    (let* ((t2 (* freq t)))
-      (* 2 ampl
-	 (- t2 (floor (+ 0.5 t2)))))))
+  (let ((freq (exact->inexact freq))
+	(ampl (exact->inexact ampl)))
+    (lambda (t)
+      (let* ((t2 (fl* freq t)))
+	(fl* 2. ampl
+	     (fl- t2 (floor (fl+ 0.5 t2))))))))
 
 (define (ideal-triangle-oscillator freq ampl)
-  (lambda (t)
-    (let ((t (* t freq)))
-      (* ampl
-	 (- 1 (* 4 (let ((r (+ t 0.25)))
-		  (abs (- 0.5 (- r (truncate r)))))))))))
+  (let ((freq (exact->inexact freq))
+	(ampl (exact->inexact ampl)))
+    (lambda (t)
+      (let ((t (fl* t freq)))
+	(fl* ampl
+	     (fl- 1. (fl* 4 (let ((r (fl+ t 0.25)))
+			      (abs (fl- 0.5 (fl- r (truncate r))))))))))))
+
+(define (harmonic-series base-freq . ampls)
+  (let* ((amplvector (list->vector ampls))
+	 (l (vector-length amplvector))
+	 (sinevector
+	  (do ((i 0 (+ i 1))
+	       (vec (make-vector l)))
+	      ((>= i l) vec)
+	    (vector-set! vec i (sine-oscillator (* (fixnum->flonum (+ i 1))
+						     base-freq)
+						(vector-ref amplvector i)
+						0.0))))
+	 (sum-func
+	  (do ((i 1 (+ i 1))
+	       (f (vector-ref sinevector 0) (sig+ f (vector-ref sinevector i))))
+	      ((>= i l) f)
+	    #f)))
+    sum-func))
+
+(define (bl-saw-oscillator freq nharms)
+  (do ((i 0 (+ i 1))
+       (l '() (cons (fl/ 1.0 (exact->inexact (+ i 1))) l)))
+      ((>= i nharms) (apply harmonic-series (cons freq (reverse l))))
+    #f))
 
 ; Stereo signals are functions from ℝ to ℝ × ℝ. In Scheme they yield two values
 ; according to the Scheme conventions for multiple-value return. We could
@@ -185,17 +218,20 @@
 		  (- 0.5 fac2))
      (sig-scale f (+ 0.5 fac2)))))
 
-; A sample-vector is a vector of samples from a signal over some arbitrary
-; interval, accompanied by a sampling frequency (in a whole number of hertz).
-; These samples represent some portion of a signal in the time domain. They are
-; a more concrete representation of a digital signal; i.e., they are closer to
-; your computer soundcard's representation of a signal as a sequence of sample
-; values. They are thus also amenable to DSP techniques such as
-; discrete frequency-domain transforms.
+; A sample-vector is a vector of samples from a signal over some
+; arbitrary interval, accompanied by a sampling frequency (in a whole
+; number of hertz).  These samples represent some portion of a signal
+; in the time domain. They are a more concrete representation of a
+; digital signal; i.e., they are closer to your computer soundcard's
+; representation of a signal as a sequence of sample values. They are
+; thus also amenable to DSP techniques such as discrete
+; frequency-domain transforms.
 
-; Samples in a sample-vector are 32-bit floating point, signed, zero-centered,
-; and unit-normalized. That means they range from -1.0 to 1.0 with zero in the
-; middle. They are stored in an underlying SRFI 4 f32vector.
+; Samples in a sample-vector are 32-bit floating point, signed,
+; zero-centered, and unit-normalized. That means they range from -1.0
+; to 1.0 with zero in the middle (again, they can exceed this range
+; but if they do they'll be clipped before output). They are stored in
+; an underlying SRFI 4 f32vector.
 
 (define-record-type :sample-vector
   (make-sample-vector vec freq)
@@ -214,15 +250,36 @@
 ; sampled with a particular frequency.
 
 (define (sig-get-fragment f start len freq)
-  (let* ((vl (inexact->exact (floor (* len freq))))
+  (let* ((vl (flonum->fixnum (truncate (* len freq))))
 	 (v (make-f32vector vl))
-	 (freq2 (exact->inexact freq)))
+	 (freq2 (fixnum->flonum freq)))
 
     (let loop
 	((i 0))
       (cond
        ((>= i vl) (make-sample-vector v freq))
-       (else (begin (f32vector-set! v i (f (+ start (/ i freq2))))
+       (else (begin (f32vector-set! v i (f (+ start (fl/
+						     (fixnum->flonum i)
+						     freq2))))
+		    (loop (+ i 1))))))))
+
+(define (stereo-sig-get-fragment f start len freq)
+  (let* ((vl (flonum->fixnum (truncate (* len freq))))
+	 (v1 (make-f32vector vl))
+	 (v2 (make-f32vector vl))
+	 (freq2 (fixnum->flonum freq)))
+
+    (let loop
+	((i 0))
+      (cond
+       ((>= i vl) (values (make-sample-vector v1 freq)
+			  (make-sample-vector v2 freq)))
+       (else (begin (receive (l r)
+			     (f (+ start (fl/
+					  (fixnum->flonum i)
+					  freq2)))
+			     (f32vector-set! v1 i l)
+			     (f32vector-set! v2 i l))
 		    (loop (+ i 1))))))))
 
 
@@ -262,11 +319,13 @@
        ((>= k len) dct-f32vector)
        (else
 	(f32vector-set! dct-f32vector k
-			(sigma 0 (- len 1)
-			       (lambda (n)
-				 (*
-				  (f32vector-ref data-f32vector n)
-				  (cos (/ (* pi (+ n 0.5) k) len))))))
+			(*
+			 (sqrt (/ (if (zero? k) 1.0 2.0) len))
+			 (sigma 0 (- len 1)
+				(lambda (n)
+				  (*
+				   (f32vector-ref data-f32vector n)
+				   (cos (/ (* pi (+ n 0.5) k) len)))))))
 	(loop (+ k 1)))))))
 
 
@@ -279,13 +338,12 @@
        (else
 	(f32vector-set! 
 	 data-f32vector k
-	 (/ (* 2 (+ (* 0.5 (f32vector-ref dct-f32vector 0))
-		    (sigma 1 (- len 1)
-			   (lambda (n)
-			     (*
-			      (f32vector-ref dct-f32vector n)
-			      (cos (/ (* pi n (+ k 0.5)) len)))))))
-	    len))
+	 (* (sqrt (/ 2.0 len))
+	    (sigma 0 (- len 1)
+		   (lambda (n)
+		     (*
+		      (f32vector-ref dct-f32vector n)
+		      (cos (/ (* pi n (+ k 0.5)) len)))))))
 	(loop (+ k 1)))))))
 
 ; You can convert sample vectors to spectrum vectors by way of the

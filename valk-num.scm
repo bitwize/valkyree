@@ -1,14 +1,14 @@
-(define (u16->u8vector-le v)
-  (let* ((l (u16vector-length v))
+(define (s16vector->u8vector/le v)
+  (let* ((l (s16vector-length v))
 	 (l2 (* l 2))
 	 (nv (make-u8vector l2 0)))
     (let loop ((i 0))
       (cond
        ((>= i l)
 	nv)
-       (else (let* ((s (u16vector-ref v i))
+       (else (let* ((s (s16vector-ref v i))
 		    (v1 (bitwise-and s 255))
-		    (v2 (arithmetic-shift s -8))
+		    (v2 (bitwise-and (arithmetic-shift s -8) 255))
 		    (i2 (* i 2)))
 	       
 	       (u8vector-set! nv i2
@@ -17,22 +17,24 @@
 			      v2)
 	       (loop (+ i 1))))))))
 
-(define (u8->u16vector-le v)
+(define (u8vector->s16vector/le v)
   (let ((l (u8vector-length v)))
     (if (odd? l)
 	(error
-	 "u8vector must have even length to be converted to u16vector")
+	 "s8vector must have even length to be converted to s16vector")
 	(let* ((l2 (arithmetic-shift l -1))
-	       (new-vector (make-u16vector l2 0)))
+	       (new-vector (make-s16vector l2 0)))
 	  (let loop ((i 0))
 	    (if (>= i l2)
 		new-vector
 		(let* ((j (arithmetic-shift i 1))
 		       (s (u8vector-ref v j))
-		       (t (u8vector-ref v (+ j 1))))
-		  (u16vector-set! new-vector i
-			       (bitwise-ior (arithmetic-shift t 8)
-					    s))
+		       (t (u8vector-ref v (+ j 1)))
+		       (n (bitwise-ior (arithmetic-shift t 8) s)))
+		  (s16vector-set! new-vector i
+				  (if (bit-set? 15 n)
+				      (bitwise-ior n -65536)
+				      n))
 		  (loop (+ i 1)))))))))
 
 
@@ -56,3 +58,11 @@
        (a (fn lower) (+ a (fn i))))
       ((>= i upper) a)
     #f))
+
+
+(define (sample->int16 x)
+  (fxmin
+   32767
+   (fxmax
+    -32768
+    (flonum->fixnum (fl* x 32768.0)))))
