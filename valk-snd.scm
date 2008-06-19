@@ -50,14 +50,18 @@
   (lambda (t)
     (f1 (* c t))))
 
-; You can shift signals in time. Signals which are time-shifted forward are
-; left-padded with silence.
-
+; You can shift signals in time.
 (define (time-shift f offset)
+  (lambda (t)
+	(f (- t offset))))
+; You can delay a signal. Signals which are time-delayed forward are
+; left-padded with silence.
+(define (time-delay f offset)
   (lambda (t)
     (if (< t offset)
 	0.0
 	(f (- t offset)))))
+
 ; You can modulate the pitch of one signal by another signal. The
 ; pitch-modulate>> procedure does this in a way that doesn't munge the
 ; waveform.
@@ -151,10 +155,17 @@
     sum-func))
 
 (define (bl-saw-oscillator freq nharms)
-  (do ((i 0 (+ i 1))
+  (sig-scale
+   (do ((i 0 (+ i 1))
        (l '() (cons (fl/ 1.0 (exact->inexact (+ i 1))) l)))
       ((>= i nharms) (apply harmonic-series (cons freq (reverse l))))
-    #f))
+    #f)
+   (- (/ 2 pi))))
+
+(define (bl-square-oscillator freq nharms duty)
+  (let* ((sw1 (bl-saw-oscillator freq nharms))
+	 (sw2 (time-shift (sig-scale sw1 -1.0) (fl* (fl/ 1.0 freq) (- duty)))))
+    (sig+ sw1 sw2)))
 
 ; Stereo signals are functions from ℝ to ℝ × ℝ. In Scheme they yield two values
 ; according to the Scheme conventions for multiple-value return. We could
