@@ -62,6 +62,14 @@
 	0.0
 	(f (- t offset)))))
 
+; You can switch between one signal input and another at a specified time.
+
+(define (sig-switch f1 f2 switch-time)
+  (lambda (t)
+    (if (fl> t switch-time)
+	(f2 t)
+	(f1 t))))
+
 ; You can modulate the pitch of one signal by another signal. The
 ; pitch-modulate>> procedure does this in a way that doesn't munge the
 ; waveform.
