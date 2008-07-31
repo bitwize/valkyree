@@ -54,6 +54,7 @@
 (define (time-shift f offset)
   (lambda (t)
 	(f (- t offset))))
+
 ; You can delay a signal. Signals which are time-delayed forward are
 ; left-padded with silence.
 (define (time-delay f offset)
@@ -174,6 +175,14 @@
   (let* ((sw1 (bl-saw-oscillator freq nharms))
 	 (sw2 (time-shift (sig-scale sw1 -1.0) (fl* (fl/ 1.0 freq) (- duty)))))
     (sig+ sw1 sw2)))
+
+; White noise generator. The noise is generated with a pseudo random
+; number generator. Note the sigil; again, this procedure stores state
+; implicitly in the RNG.
+
+(define (white-noise>> ampl)
+  (lambda (t)
+    (* (random-real) ampl)))
 
 ; Stereo signals are functions from ℝ to ℝ × ℝ. In Scheme they yield two values
 ; according to the Scheme conventions for multiple-value return. We could
@@ -301,7 +310,52 @@
 			     (f32vector-set! v2 i l))
 		    (loop (+ i 1))))))))
 
+; You can play back some of the samples captured in a sample-vector as a signal.
 
+(define (play-sample-vector svec start end)
+  (let*
+      ((freq (sample-vector-sampling-frequency svec))
+       (ffreq (fixnum->flonum freq))
+       (sstart (flonum->fixnum (truncate (fl* start ffreq))))
+       (send (flonum->fixnum (truncate (fl* end ffreq)))))
+    (lambda (t)
+      (let ((st (fx+ (flonum->fixnum (truncate (fl* t ffreq))) sstart)))
+	(if (and (> st 0) (< st send))
+	    (sample-vector-ref svec st)
+	    0.0)))))
+
+; You can also play back a sample with a loop; the signal will repeatedly
+; play back everything from the loop point to the end point, infinitely.
+
+(define (play-sample-vector-looping svec start loop end)
+  (let*
+      ((freq (sample-vector-sampling-frequency svec))
+       (ffreq (fixnum->flonum freq))
+       (sstart (flonum->fixnum (truncate (fl* start ffreq))))
+       (sloop (flonum->fixnum (truncate (fl* loop ffreq))))
+       (send (flonum->fixnum (truncate (fl* end ffreq))))
+       (sloop-length (fx- send sloop))
+       (srun-length (fx- send sstart)))
+    (lambda (t)
+      (let ((st (fx+ (flonum->fixnum (truncate (fl* t ffreq))) sstart)))
+	(if (> st 0)
+	    (if (< st send)
+		(sample-vector-ref svec st)
+		(sample-vector-ref svec
+				   (+ sloop (remainder (- st send) sloop-length))))
+	    0.0)))))
+  
+; Stereo versions of the above.
+
+(define (stereo-play-sample-vector svec1 svec2 start end)
+  (stereo
+   (play-sample-vector svec1 start end)
+   (play-sample-vector svec2 start end)))
+
+(define (stereo-play-sample-vector-looping svec1 svec2 start loop end)
+  (stereo
+   (play-sample-vector-looping svec1 start loop end)
+   (play-sample-vector-looping svec2 start loop end)))
 
 ; A spectrum-vector is like a sample-vector, but in the frequency
 ; domain.  The sampling frequency represents the Nyquist frequency of
