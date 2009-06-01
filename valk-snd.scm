@@ -184,6 +184,15 @@
   (lambda (t)
     (* (random-real) ampl)))
 
+; A special signal used for crafting ADSR envelopes and the like.
+
+(define (ramp source target time)
+  (if (<= time 0.0)
+      (error "ramp time must be positive")
+      (let ((fac (/ (- target source) time)))
+	(lambda (t)
+	  (+ source (* t fac))))))
+  
 ; Stereo signals are functions from ℝ to ℝ × ℝ. In Scheme they yield two values
 ; according to the Scheme conventions for multiple-value return. We could
 ; construct an n-channel signal in this manner by changing the function's co-

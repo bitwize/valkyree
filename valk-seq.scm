@@ -1,33 +1,73 @@
-(define *htf* (expt 2 (/ 1.0 12.0)))
+;; A "dollar" is 100 cents, or 1 halftone on the Western diatonic
+;; scale (the tonal distance between two adjacent keys on the piano
+;; keyboard, counting both black and white keys). It corresponds to a
+;; multiplication factor of 2^(1/12).
+
+(define dollar-multiplier (expt 2 (/ 1.0 12.0)))
+
+; Generate a note table with concert A (440.00 Hz) = key 69.
 
 (define note-table
-  (let ((a 55.0))
+  (let ((a 440.0))
     (let loop
-	((c 0) (v (make-vector 72 0.0)))
-      (cond ((>= c 72) v)
-	    (else (vector-set! v c (* a (expt *htf* c)))
-		  (loop (+ c 1) v)
-		  )))))
+	((c 0) (v (make-vector 128 0.0)))
+      (cond ((>= c 128) v)
+	    (else (vector-set! v c (* a (expt dollar-multiplier (- c 69))))
+		  (loop (+ c 1) v))))))
 
+;; Calculate the note length (in seconds) given a length in beats and
+;; a tempo in bpm.
 
 (define (note-length beats bpm)
   (* beats (/ 60.0 bpm)))
 
+;; Establish a parameter for the current bpm and initialize it to 120.
+
 (define current-bpm
   (make-parameter 120))
 
-(define (make-simple-inst f)
-  (lambda (freq vel len)
-    (let* ((f2 (f freq vel)))
-      (lambda (i)
-	(if (> i len) 0 (f2 i))))))
+(define-record-type :vinst
+  (make-vinst signal base-freq envelope)
+  vinst?
+  (signal vinst-signal)
+  (base-freq vinst-base-freq)
+  (envelope vinst-envelope))
 
-(define (make-adsr-inst f aenv . specifier)    
-    (lambda (freq vel len)
-      (let* ((f2 (f freq vel)))
-	(sig*
-	 f2
-	 (adsr-envelope-gen aenv len)))))
+(define (basic-env length)
+  (sig-switch (constantly 1.0) silence length))
+
+(define-record-type :adsr
+  (make-adsr a d s r)
+  adsr?
+  (a adsr-attack)
+  (d adsr-decay)
+  (s adsr-sustain)
+  (r adsr-release))
+
+(define (gen-adsr-envelope adsr)
+  (lambda (length)
+    (let ((a (adsr-attack adsr))
+	  (d (adsr-decay adsr))
+	  (s (min 1.0 (adsr-sustain adsr)))
+	  (r (adsr-release adsr)))
+      (sig-switch
+       (ramp 0.0 1.0 a)
+       (sig-switch
+	(time-delay (ramp 1.0 s d) a)
+	(sig-switch
+	 (constantly s)
+	 (time-delay (ramp s 0.0 r) length)
+	 length)
+	(+ a d))
+       a))))
+
+(define (make-simple-inst f base-freq)
+  (make-vinst f base-freq
+	      (lambda (length) (constantly 1.0))))
+
+(define (make-adsr-inst f base-freq aenv)    
+  (make-vinst f base-freq
+	      (gen-adsr-envelope aenv)))
 
 (define-record-type :vtrack
   (make-vtrack qps elist)
