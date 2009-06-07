@@ -55,3 +55,38 @@
 	(begin (f32vector-set! fv i (u16->sigval (u16vector-ref ev i)))
 	       (loop (+ i 1))))))))
 
+(define (make-stereo-sig-get-fragment/extvec constructor converter setter)
+  (lambda (sig start length freq)
+    (let* ((vl (flonum->fixnum (truncate (* len freq 2))))
+	   (v1 (constructor vl))
+	   (freq2 (fixnum->flonum freq)))
+      
+      (let loop
+	  ((i 0))
+	(cond
+	 ((>= i vl) v1)
+	 (else (begin (receive (l r)
+				(sig (+ start (fl/
+					       (fixnum->flonum i)
+					       freq2)))
+			       (setter v1 i (converter l))
+			       (setter v1 (+ i 1) (converter r)))
+		      (loop (+ i 2)))))))))
+
+(define (make-sig-get-fragment/extvec constructor converter setter)
+  (lambda (sig start length freq)
+    (let* ((vl (flonum->fixnum (truncate (* len freq))))
+	   (v1 (constructor vl))
+	   (freq2 (fixnum->flonum freq)))
+      
+      (let loop
+	  ((i 0))
+	(cond
+	 ((>= i vl) v1)
+	 (else (begin 
+		 (setter v1 i (converter 
+			       (sig
+				(+ start (fl/
+					  (fixnum->flonum i)
+					  freq2)))))
+		 (loop (+ i 2)))))))))

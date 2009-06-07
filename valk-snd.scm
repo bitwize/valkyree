@@ -316,7 +316,7 @@
 					  (fixnum->flonum i)
 					  freq2)))
 			     (f32vector-set! v1 i l)
-			     (f32vector-set! v2 i l))
+			     (f32vector-set! v2 i r))
 		    (loop (+ i 1))))))))
 
 ; You can play back some of the samples captured in a sample-vector as a signal.

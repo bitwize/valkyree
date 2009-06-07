@@ -69,11 +69,6 @@
   (make-vinst f base-freq
 	      (gen-adsr-envelope aenv)))
 
-(define-record-type :vtrack
-  (make-vtrack qps elist)
-  vtrack?
-  (qps vtrack-qps)
-  (elist vtrack-elist))
 
 (define-record-type :vevent
   (make-vevent time duration type param)
@@ -105,11 +100,13 @@
 
 
 (define (play-tone1 inst freq vel bstart blen bpm)
-  (let* (
-	 (len (note-length blen bpm))
-	 (f (inst freq vel len))
-	 )
-    (sample-offset
+  (let* ((len (note-length blen bpm))
+	 (f (sig* (pitch-modulate>>
+		   (vinst-signal inst)
+		   (constantly (/ freq (vinst-base-freq inst))))
+		  (sig* ((vinst-envelope inst) len)
+			(constantly vel)))))
+    (time-delay
      f
      (note-length bstart bpm))))
 
