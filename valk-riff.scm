@@ -36,7 +36,7 @@
      8))
 
 
-(define (u8vector->int32-le u8vec)
+(define (u8vector->int32/le u8vec)
   (bitwise-ior
    (u8vector-ref u8vec 0)
    (arithmetic-shift (u8vector-ref u8vec 1)
@@ -46,11 +46,23 @@
    (arithmetic-shift (u8vector-ref u8vec 3)
 		     24)))
 
-(define (u8vector->int16-le u8vec)
+(define (u8vector->int16/le u8vec)
   (bitwise-ior
    (u8vector-ref u8vec 0)
    (arithmetic-shift (u8vector-ref u8vec 1)
 		     8)))
+
+(define (int16->u8vector/le i)
+  (u8vector
+   (bitwise-and i 255)
+   (bitwise-and (arithmetic-shift i -8) 255)))
+
+(define (int32->u8vector/le i)
+  (u8vector
+   (bitwise-and i 255)
+   (bitwise-and (arithmetic-shift i -8) 255)
+   (bitwise-and (arithmetic-shift i -16) 255)
+   (bitwise-and (arithmetic-shift i -24) 255)))
 
 (define (u8vector->riff-type u8vec)
   (string
@@ -71,32 +83,32 @@
 		   0
 		   (car rest)))
 	 (type (u8vector->riff-type (subu8vector u8vec offs (+ offs 4))))
-	 (size (u8vector->int32-le (subu8vector u8vec (+ offs 4) (+ offs 8))))
+	 (size (u8vector->int32/le (subu8vector u8vec (+ offs 4) (+ offs 8))))
 	 (data (subu8vector u8vec (+ offs 8) (+  offs 8 size))))    
     (make-riff-chunk type data)))
 
 (define (build-main-chunk u8vec)
   (let* (
 	 (type (u8vector->riff-type (subu8vector u8vec 8 12)))
-	 (size (- (u8vector->int32-le  (subu8vector u8vec 4 8)) 4))
+	 (size (- (u8vector->int32/le  (subu8vector u8vec 4 8)) 4))
 	 (data (subu8vector u8vec 12 (+  12 size))))
     
     (make-riff-chunk type data)))
 
 (define (destructure-fmt-chunk chunk)
-  (let* ((fmt (u8vector->int16-le (riff-chunk-section chunk 0 2)))
-	 (channels (u8vector->int16-le (riff-chunk-section chunk 2 4)))
-	 (sample-rate (u8vector->int16-le (riff-chunk-section chunk 4 8)))
-	 (byte-rate (u8vector->int16-le (riff-chunk-section chunk 8 12)))
-	 (block-align (u8vector->int16-le (riff-chunk-section chunk 12 14)))
-	 (bits-per-sample (u8vector->int16-le (riff-chunk-section chunk 14 16))))
+  (let* ((fmt (u8vector->int16/le (riff-chunk-section chunk 0 2)))
+	 (channels (u8vector->int16/le (riff-chunk-section chunk 2 4)))
+	 (sample-rate (u8vector->int16/le (riff-chunk-section chunk 4 8)))
+	 (byte-rate (u8vector->int16/le (riff-chunk-section chunk 8 12)))
+	 (block-align (u8vector->int16/le (riff-chunk-section chunk 12 14)))
+	 (bits-per-sample (u8vector->int16/le (riff-chunk-section chunk 14 16))))
     (values fmt channels sample-rate byte-rate block-align bits-per-sample)))
 
 (define (chunk->binary chunk)
   (let* ((typev (riff-type->u8vector (riff-chunk-type chunk)))
 	 (datav (riff-chunk-data chunk))
 	 (size (u8vector-length datav))
-	 (sizev (int32->u8vector-le size))
+	 (sizev (int32->u8vector/le size))
 	 (allv (u8vector-append typev sizev datav)))
     (if (> (remainder size 2) 0) (u8vector-append allv (u8vector 0)) allv)))
 
@@ -104,7 +116,7 @@
   (let* ((typev (riff-type->u8vector (riff-chunk-type chunk)))
 	 (datav (riff-chunk-data chunk))
 	 (size (+ 4 (u8vector-length datav)))
-	 (sizev (int32->u8vector-le size))
+	 (sizev (int32->u8vector/le size))
 	 (allv (u8vector-append (riff-type->u8vector "RIFF") sizev typev datav)))
     (if (> (remainder size 2) 0) (u8vector-append allv (u8vector 0)) allv)))
 
@@ -129,12 +141,12 @@
 	  (make-wave-descriptor f ch sr br ba bs (riff-chunk-data datc)))))))
 
 (define (descriptor->wave-contents desc)
-  (let* ((fmtv (int16->u8vector-le (wave-descriptor-fmt desc)))
-	 (ncv (int16->u8vector-le (wave-descriptor-channels desc)))
-	 (sratv (int32->u8vector-le (wave-descriptor-sample-rate desc)))
-	 (bratv (int32->u8vector-le (wave-descriptor-byte-rate desc)))
-	 (balnv (int16->u8vector-le (wave-descriptor-block-align desc)))
-	 (bpsv (int16->u8vector-le (wave-descriptor-bits-per-sample desc)))
+  (let* ((fmtv (int16->u8vector/le (wave-descriptor-fmt desc)))
+	 (ncv (int16->u8vector/le (wave-descriptor-channels desc)))
+	 (sratv (int32->u8vector/le (wave-descriptor-sample-rate desc)))
+	 (bratv (int32->u8vector/le (wave-descriptor-byte-rate desc)))
+	 (balnv (int16->u8vector/le (wave-descriptor-block-align desc)))
+	 (bpsv (int16->u8vector/le (wave-descriptor-bits-per-sample desc)))
 	 (c1 (make-riff-chunk "fmt " (u8vector-append fmtv ncv sratv bratv balnv bpsv)))
 	 (c2 (make-riff-chunk "data" (wave-descriptor-data desc)))
 	 )

@@ -9,27 +9,24 @@
 (define
   (write-raw fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sound-render-s16vector gen t samplerate))
+	 (v (sig-get-fragment/s16vector gen 0.0 t samplerate))
 	 (nv (s16vector->u8vector/le v))
 	 
 	 (len (u8vector-length nv)))    
     (write-subu8vector nv 0 len p)
     (close-output-port p)))
 
-(define (st-write-raw fl gen t samplerate)
+(define (stereo-write-raw fl gen t samplerate)
   (let*  ((p (open-output-file fl))
-	 (v (sound-render-s16vector-st gen t samplerate))
+	 (v (stereo-sig-get-fragment/s16vector gen 0.0 t samplerate))
 	 (nv (s16vector->u8vector/le v))
-	 
 	 (len (u8vector-length nv)))
-    
-    
     (write-subu8vector nv 0 len p)
     (close-output-port p)))
 
 (define (write-wav fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sound-render-s16vector gen t samplerate))
+	 (v (sig-get-fragment/s16vector gen 0.0 t samplerate))
 	 (nv (s16vector->u8vector/le v))
 	 (wd (make-wave-descriptor 1 1 samplerate (* samplerate 4) 4 16 nv))
 	 (wv (descriptor->wave-contents wd))
@@ -37,9 +34,9 @@
     (write-subu8vector wv 0 len p)
     (close-output-port p)))
 
-(define (st-write-wav fl gen t samplerate)
+(define (stereo-write-wav fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sound-render-s16vector-st gen t samplerate))
+	 (v (sig-get-fragment/s16vector-st gen 0.0 t samplerate))
 	 (nv (s16vector->u8vector/le v))
 	 (wd (make-wave-descriptor 1 1 samplerate (* samplerate 2) 2 16 nv))
 	 (wv (descriptor->wave-contents wd))

@@ -57,7 +57,7 @@
 
 (define (make-stereo-sig-get-fragment/extvec constructor converter setter)
   (lambda (sig start length freq)
-    (let* ((vl (flonum->fixnum (truncate (* len freq 2))))
+    (let* ((vl (flonum->fixnum (truncate (* length freq 2))))
 	   (v1 (constructor vl))
 	   (freq2 (fixnum->flonum freq)))
       
@@ -75,7 +75,7 @@
 
 (define (make-sig-get-fragment/extvec constructor converter setter)
   (lambda (sig start length freq)
-    (let* ((vl (flonum->fixnum (truncate (* len freq))))
+    (let* ((vl (flonum->fixnum (truncate (* length freq))))
 	   (v1 (constructor vl))
 	   (freq2 (fixnum->flonum freq)))
       
@@ -89,4 +89,41 @@
 				(+ start (fl/
 					  (fixnum->flonum i)
 					  freq2)))))
-		 (loop (+ i 2)))))))))
+		 (loop (+ i 1)))))))))
+
+(define sig-get-fragment/u16vector
+  (make-sig-get-fragment/extvec make-u16vector sigval->u16 u16vector-set!))
+
+(define stereo-sig-get-fragment/u16vector
+  (make-stereo-sig-get-fragment/extvec
+   make-u16vector sigval->u16 u16vector-set!))
+
+(define sig-get-fragment/s16vector
+  (make-sig-get-fragment/extvec make-s16vector sigval->s16 s16vector-set!))
+
+(define stereo-sig-get-fragment/s16vector
+  (make-stereo-sig-get-fragment/extvec
+   make-s16vector sigval->s16 s16vector-set!))
+
+(define (u16vector->u8vector/le vec)
+  (let* ((l (u16vector-length vec))
+	 (newvec (make-u8vector (* l 2))))
+    (do ((i 0 (+ i 2))
+	 (j 0  (+ j 1)))
+	((>= j l) newvec)
+	(let ((val (u16vector-ref vec j)))
+	  (u8vector-set! newvec i (bitwise-and val 255))
+	  (u8vector-set! newvec (+ i 1) (bitwise-and
+					 (arithmetic-shift val -8)
+					 255))))))
+(define (s16vector->u8vector/le vec)
+  (let* ((l (s16vector-length vec))
+	 (newvec (make-u8vector (* l 2))))
+    (do ((i 0 (+ i 2))
+	 (j 0  (+ j 1)))
+	((>= j l) newvec)
+	(let ((val (s16vector-ref vec j)))
+	  (u8vector-set! newvec i (bitwise-and val 255))
+	  (u8vector-set! newvec (+ i 1) (bitwise-and
+					 (arithmetic-shift val -8)
+					 255))))))
