@@ -12,7 +12,7 @@
 (include "valk-num.scm")
 (include "valk-snd.scm")
 (include "valk-seq.scm")
-(include "valk-render.scm")
+(include "valk-extvec.scm")
 (include "valk-riff.scm")
 (include "valk-file.scm")
 

@@ -56,7 +56,10 @@
 	(time-delay (ramp 1.0 s d) a)
 	(sig-switch
 	 (constantly s)
-	 (time-delay (ramp s 0.0 r) length)
+	 (sig-switch
+	  (time-delay (ramp s 0.0 r) length)
+	  silence
+	  (+ length r))
 	 length)
 	(+ a d))
        a))))

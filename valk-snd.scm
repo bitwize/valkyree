@@ -188,7 +188,7 @@
 
 (define (ramp source target time)
   (if (<= time 0.0)
-      (error "ramp time must be positive")
+      (constantly target)
       (let ((fac (/ (- target source) time)))
 	(lambda (t)
 	  (+ source (* t fac))))))
