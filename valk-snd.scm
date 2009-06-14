@@ -75,11 +75,12 @@
 ; pitch-modulate>> procedure does this in a way that doesn't munge the
 ; waveform.
 
-; The >> at the end is a sigil which indicates that the signal this procedure
-; returns stores state in between its invocations, meaning that we can't
-; guarantee the same value if called more than once with the same time t.
-; It is best to use such signals only in instances where you know that t
-; will be monotonically increasing or decreasing.
+; The >> at the end is a sigil which indicates that the signal this
+; procedure returns stores state in between its invocations, meaning
+; that we can't guarantee the same value if called more than once with
+; the same time t. (The engineering buzzword for this is hysteresis.)
+; It is best to use such signals only in instances where you know that
+; t will be monotonically increasing or decreasing.
 
 (define (pitch-modulate>> f1 f2)
   (let ((p #f)

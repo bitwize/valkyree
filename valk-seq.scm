@@ -81,6 +81,7 @@
   (type vevent-type)
   (param vevent-param))
 
+
 (define (add-event! els evt)
   (cond
    ((null? els)
@@ -102,7 +103,7 @@
        (else (loop (cdr l))))))))
 
 
-(define (play-tone1 inst freq vel bstart blen bpm)
+(define (play-tone1>> inst freq vel bstart blen bpm)
   (let* ((len (note-length blen bpm))
 	 (f (sig* (pitch-modulate>>
 		   (vinst-signal inst)
@@ -113,23 +114,25 @@
      f
      (note-length bstart bpm))))
 
-(define (play-tone inst freq vel bstart blen)
-  (play-tone1 inst freq vel bstart blen (current-bpm)))
+(define (play-tone>> inst freq vel bstart blen)
+  (play-tone1>> inst freq vel bstart blen (current-bpm)))
 
-(define (play-roll inst notelist start)
+(define (play-roll>> inst notelist)
   (let loop ((l notelist)
-	     (f silence)
-	     (m start))
+	     (f silence))
     (if
      (null? l)
      f
-     (let* ((n (caar l))
-	    (v (cadr (car l)))
-	    (d (caddr (car l))))
-       (loop (cdr l)  
-	     (if (zero? n)
-		 f
+     (loop (cdr l)  
+	   (if (not  (eq? (vevent-type (car l)) 'note))
+	       f
+	       (let* ((n (car l))
+		      (q (car (vevent-param n)))
+		      (v (cdr (vevent-param n)))
+		      (t (vevent-time n))
+		      (d (vevent-duration n)))
+		 
 		 (sig+ f
-		      (play-tone inst
-				 n v m d)))
-	     (+ m d))))))
+		       (play-tone>> inst
+				  q v t d)))
+	     )))))
