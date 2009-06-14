@@ -66,7 +66,7 @@
 
 (define (make-simple-inst f base-freq)
   (make-vinst f base-freq
-	      (lambda (length) (constantly 1.0))))
+	      (lambda (length) (sig-switch (constantly 1.0) silence length))))
 
 (define (make-adsr-inst f base-freq aenv)    
   (make-vinst f base-freq
@@ -103,19 +103,15 @@
        (else (loop (cdr l))))))))
 
 
-(define (play-tone1>> inst freq vel bstart blen bpm)
-  (let* ((len (note-length blen bpm))
-	 (f (sig* (pitch-modulate>>
+(define (play-note>> inst freq vel start len)
+  (let* ((f (sig* (pitch-modulate>>
 		   (vinst-signal inst)
 		   (constantly (/ freq (vinst-base-freq inst))))
 		  (sig* ((vinst-envelope inst) len)
 			(constantly vel)))))
     (time-delay
      f
-     (note-length bstart bpm))))
-
-(define (play-tone>> inst freq vel bstart blen)
-  (play-tone1>> inst freq vel bstart blen (current-bpm)))
+     start)))
 
 (define (play-roll>> inst notelist)
   (let loop ((l notelist)
@@ -132,7 +128,9 @@
 		      (t (vevent-time n))
 		      (d (vevent-duration n)))
 		 
-		 (sig+ f
-		       (play-tone>> inst
-				  q v t d)))
+		 (sig-switch
+		  f
+		  (play-note>> inst
+			       q v t d)
+		  t))
 	     )))))
