@@ -15,4 +15,4 @@
 (include "valk-extvec.scm")
 (include "valk-riff.scm")
 (include "valk-file.scm")
-
+(include "valk-output.scm")
