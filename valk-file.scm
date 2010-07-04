@@ -36,7 +36,7 @@
 
 (define (stereo-write-wav fl gen t samplerate)
   (let* ((p (open-output-file fl))
-	 (v (sig-get-fragment/s16vector-st gen 0.0 t samplerate))
+	 (v (stereo-sig-get-fragment/s16vector gen 0.0 t samplerate))
 	 (nv (s16vector->u8vector/le v))
 	 (wd (make-wave-descriptor 1 1 samplerate (* samplerate 2) 2 16 nv))
 	 (wv (descriptor->wave-contents wd))

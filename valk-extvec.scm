@@ -30,7 +30,7 @@
 	 (fv (make-f32vector l)))
     (let loop ((i 0))
       (cond
-       ((>= i l) (really-make-sample-vector fv samplerate))
+       ((>= i l) (make-sample-vector fv samplerate))
        (else 
 	(begin (f32vector-set! fv i (s16->sigval (s16vector-ref ev i)))
 	       (loop (+ i 1))))))))
@@ -50,7 +50,7 @@
 	 (fv (make-f32vector l)))
     (let loop ((i 0))
       (cond
-       ((>= i l) (really-make-sample-vector fv samplerate))
+       ((>= i l) (make-sample-vector fv samplerate))
        (else 
 	(begin (f32vector-set! fv i (u16->sigval (u16vector-ref ev i)))
 	       (loop (+ i 1))))))))

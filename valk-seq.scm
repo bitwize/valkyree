@@ -264,7 +264,8 @@
 
 
 (define (play-note>> inst freq vel start len)
-  (let* ((f (sig* (pitch-modulate>>
+  (let* ((inst (if (procedure? inst) (inst freq vel) inst))
+	 (f (sig* (pitch-modulate>>
 		   (vinst-signal inst)
 		   (constantly (/ freq (vinst-base-freq inst))))
 		  (sig* ((vinst-envelope inst) len)
