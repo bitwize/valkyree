@@ -44,6 +44,14 @@
     (write-subu8vector wv 0 len p)
     (close-output-port p)))
 
+(define (write-ascii-wavetable fl gen t samplerate)
+  (let* ((p (open-output-file fl))
+	 (v (sig-get-fragment gen 0.0 t samplerate))
+	 (len (sample-vector-length v)))
+    (do ((i 0 (+ i 1)))
+	((>= i len) (close-output-port p))
+      (write (sample-vector-ref v i) p)
+      (newline p))))
 
 (define (read-chunk port size)
   (let* ((vec (make-u8vector size))

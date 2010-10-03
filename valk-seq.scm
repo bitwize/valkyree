@@ -187,11 +187,18 @@
   (make-parameter 0.125))
 
 (define-record-type :vinst
-  (make-vinst signal base-freq envelope)
+  (make-vinst tag signal-or-selector base-freq envelope)
   vinst?
-  (signal vinst-signal)
+  (tag vinst-tag)
+  (signal-or-selector vinst-signal-or-selector)
   (base-freq vinst-base-freq)
   (envelope vinst-envelope))
+
+(define (vinst-signal inst freq vel)
+  (cond
+   ((eq? (vinst-tag inst) 'fixed) (vinst-signal-or-selector inst))
+   ((eq? (vinst-tag inst) 'variable) ((vinst-signal-or-selector inst) freq vel))
+   (else (error "invalid tag in instrument" vinst-signal))))
 
 (define (basic-env length)
   (sig-switch (constantly 1.0) silence length))
@@ -225,12 +232,21 @@
        a))))
 
 (define (make-simple-inst f base-freq)
-  (make-vinst f base-freq
+  (make-vinst 'fixed f base-freq
 	      (lambda (length) (sig-switch (constantly 1.0) silence length))))
 
 (define (make-adsr-inst f base-freq aenv)    
-  (make-vinst f base-freq
+  (make-vinst 'fixed f base-freq
 	      (gen-adsr-envelope aenv)))
+
+(define (make-simple-variable-inst selector base-freq)
+  (make-vinst 'variable selector base-freq
+	      (lambda (length) (sig-switch (constantly 1.0) silence length))))
+
+(define (make-adsr-variable-inst selector base-freq aenv)    
+  (make-vinst 'variable selector base-freq
+	      (gen-adsr-envelope aenv)))
+
 
 
 (define-record-type :vevent
@@ -264,9 +280,8 @@
 
 
 (define (play-note>> inst freq vel start len)
-  (let* ((inst (if (procedure? inst) (inst freq vel) inst))
-	 (f (sig* (pitch-modulate>>
-		   (vinst-signal inst)
+  (let* ((f (sig* (pitch-modulate>>
+		   (vinst-signal inst freq vel)
 		   (constantly (/ freq (vinst-base-freq inst))))
 		  (sig* ((vinst-envelope inst) len)
 			(constantly vel)))))

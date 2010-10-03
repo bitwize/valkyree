@@ -143,7 +143,7 @@
     (lambda (t)
       (let ((t (fl* t freq)))
 	(fl* ampl
-	     (fl- 1. (fl* 4 (let ((r (fl+ t 0.25)))
+	     (fl- 1. (fl* 4. (let ((r (fl+ t 0.25)))
 			      (abs (fl- 0.5 (fl- r (truncate r))))))))))))
 
 (define (harmonic-series base-freq . ampls)
@@ -163,6 +163,50 @@
 	      ((>= i l) f)
 	    #f)))
     sum-func))
+
+(define (dsf-oscillator/sin n a th)
+  (lambda (nt)
+    (let* ((t (fl* 2.0 pi nt))
+	   (s (fl- 1.0 (fl+ (fl* 2.0 a (cos t)) (fl* a a)))))
+      (if (zero? s) 0.0
+
+	  (fl/
+	   (fl+ (fl- (fl- (sin th) (fl* a (sin (fl+ th t))))
+		 (fl* (expt a n) (sin (+ th (fl* n t)))))
+	      (fl* (expt a (fl- n 1.0)) (sin (fl+ th (fl* (fl- n 1.0) t)))))
+	   s)))))
+
+(define (dsf-oscillator/cos n a th)
+  (lambda (nt)
+    (let* ((t (fl* 2.0 pi nt))
+	   (s (fl- 1.0 (fl+ (fl* 2.0 a (cos t)) (fl* a a)))))
+      (if (zero? s) 0.0
+
+	  (fl/
+	   (fl+ (fl- (fl- (cos th) (fl* a (cos (fl+ th t))))
+		 (fl* (expt a n) (cos (+ th (fl* n t)))))
+	      (fl* (expt a (fl- n 1.0)) (cos (fl+ th (fl* (fl- n 1.0) t)))))
+	   s)))))
+
+; BLIT oscillator. From Stilson and Smith 1996
+
+(define (blit-oscillator freq rate)
+  (define (sincm t m)
+    (let ((denom (fl* m (sin (fl* pi t (fl/ 1.0 m))))))
+      (if (zero? denom)
+	  0.0
+	  (fl/ (sin (fl* pi t)) denom))))
+  (let* ((p (/ rate freq))
+	 (m (+ 1.0 (* 2.0 (floor (* p 0.5)))))
+	 (ratio (/ m p)))
+    (display p)
+    (newline)
+    (display m)
+    (newline)
+    (lambda (t)
+      (* ratio (sincm (* ratio rate t) m)))))
+
+
 
 (define (bl-saw-oscillator freq nharms)
   (sig-scale

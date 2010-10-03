@@ -16,3 +16,7 @@
 (define (make-stereo-wav-file-emitter fn . opt-freq)
   (lambda (f dur)
     (stereo-write-wav fn f dur (if (null? opt-freq) 44100 (car opt-freq)))))
+
+(define (make-ascii-wavetable-emitter fn . opt-freq
+  (lambda (f dur)
+    (write-ascii-wavetable fn f dur (if (null? opt-freq) 44100 (car opt-freq)))))
