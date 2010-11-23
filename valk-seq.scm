@@ -257,6 +257,24 @@
   (type vevent-type)
   (param vevent-param))
 
+(define (raw-vevent-note-frequency evt)
+  (car (vevent-param evt)))
+
+(define (raw-vevent-note-velocity evt)
+  (cdr (vevent-param evt)))
+
+(define (assert-vevent-type event type)
+  (if (not (eq? (vevent-type event) type))
+      (error "Wrong event type " (vevent-type event))))
+      
+
+(define (vevent-note-frequency evt)
+  (assert-vevent-type evt 'note)
+  (raw-vevent-note-frequency evt))
+
+(define (vevent-note-velocity evt)
+  (assert-vevent-type evt 'note)
+  (raw-vevent-note-velocity evt))
 
 (define (add-event! els evt)
   (cond
@@ -318,6 +336,20 @@
 	      (table-ref notename-table number-or-name)
 	      number-or-name)))
 
+;; notespec->event : list float -> vevent
+
+;;   Changes the notespec given by `n' into a note event starting at
+;;   `start'. A notespec is a list of the following form:
+
+;;      (note-name strength length)
+
+;;   where `strength' is a relative value of how hard to hit or how
+;;   loud to play the note (1.0 = full) and `length' is in beats. For
+;;   example, playing middle C at half strength for a quarter note in
+;;   4/4 time would have this notespec:
+
+;;      (c4 0.5 1.0)
+
 (define (notespec->event n start)
   (make-vevent start 
 	       (note-length (max 0.0 (- (caddr n) (current-gap-time)))
@@ -336,3 +368,17 @@
      ((eq? (car (car nl)) 'rest) (loop (+ start (note-length (cadr (car nl)) (current-bpm))) (cdr nl) el))
      (else (let ((ev (notespec->event (car nl) start)))
 	     (loop (+ start (note-length (caddr (car nl)) (current-bpm))) (cdr nl) (cons ev el)))))))
+
+(define (tweak-freqs eventlist sample-freq)
+  (map (lambda (event)
+	 (if (eq? (vevent-type event) 'note)
+	     (let* ((orig-f (raw-vevent-note-frequency event))
+		    (divisor (round (/ sample-freq orig-f)))
+		    (new-f (/ sample-freq divisor)))
+	       (make-vevent
+		(vevent-time event)
+		(vevent-duration event)
+		(vevent-type event)
+		(cons new-f (raw-vevent-note-velocity event))))
+	     event))
+       eventlist))
