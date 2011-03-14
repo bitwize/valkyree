@@ -206,6 +206,16 @@
     (lambda (t)
       (* ratio (sincm (* ratio rate t) m)))))
 
+(define (blit-square-oscillator>> freq rate)
+  (let* ((b (time-shift (blit-oscillator 1.0 rate) (/ 0.25 freq)))
+	 (bneg (sig-scale (time-shift b (/ 0.5 freq)) -1.0))
+	 (b2 (sig-switch b bneg (/ 0.5 freq)))
+	 (b3 (lambda (t) (b2 (- t (* (truncate (/ t (/ 1.0 freq))) (/ 1.0 freq)))))))
+    (let ((orig 0.0))
+      (lambda (t)
+	(let ((new (+ orig (b3 t))))
+	  (set! orig new) new)))))
+
 
 
 (define (bl-saw-oscillator freq nharms)
